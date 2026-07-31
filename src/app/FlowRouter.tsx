@@ -6,6 +6,7 @@ import { workspace } from '../core/workspace';
 import { CompressingScreen } from '../screens/CompressingScreen';
 import { LibraryScreen } from '../screens/LibraryScreen';
 import { PermissionGateScreen } from '../screens/PermissionGateScreen';
+import { PreviewScreen } from '../screens/PreviewScreen';
 import { SelectedScreen } from '../screens/SelectedScreen';
 import { useToast } from '../ui';
 import { useFlow } from './flow/FlowProvider';
@@ -47,8 +48,12 @@ export function FlowRouter() {
         />
       );
     case 'preview':
-      // Unreachable until the preview screen lands; a completed job cannot be reached before then.
-      return <LibraryScreen access={access} onSelect={actions.select} />;
+      return (
+        <PreviewScreen
+          outcome={state.outcome}
+          onFinished={actions.backToLibrary}
+        />
+      );
   }
 }
 
