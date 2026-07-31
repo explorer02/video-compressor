@@ -1,5 +1,14 @@
+import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
+import {
+  DEFAULT_TIER_ID,
+  evaluateTier,
+  isAlreadyOptimized,
+  sourceFactsFrom,
+  tierById,
+} from '../core/compression/tiers';
+import type { QualityTierId } from '../core/compression/types';
 import {
   formatBytes,
   formatDurationWords,
@@ -7,18 +16,28 @@ import {
 } from '../core/format';
 import { sizeIndex } from '../core/sizeIndex';
 import type { LibraryVideo } from '../core/videoLibrary';
+import { TierSelector } from '../features/compression/TierSelector';
 import { VideoThumbnail } from '../features/library/VideoThumbnail';
-import { colors, spacing } from '../theme';
-import { AppText, Button, Screen } from '../ui';
+import { colors, radius, spacing } from '../theme';
+import { AppText, Banner, Button, Screen } from '../ui';
 
 export type SelectedScreenProps = {
   video: LibraryVideo;
   onBack: () => void;
 };
 
-/** §3.2 — the chosen video, its original stats, and the way back to the library. */
+/** §3.2 — the chosen video, its original stats, and the quality tier to compress it to. */
 export function SelectedScreen({ video, onBack }: SelectedScreenProps) {
   const sizeBytes = sizeIndex.get(video);
+  const facts = useMemo(
+    () => sourceFactsFrom(video, sizeBytes),
+    [sizeBytes, video]
+  );
+
+  const [tier, setTier] = useState<QualityTierId | null>(() =>
+    defaultEligibleTier(facts)
+  );
+  const optimized = isAlreadyOptimized(facts);
 
   return (
     <Screen>
@@ -47,6 +66,17 @@ export function SelectedScreen({ video, onBack }: SelectedScreenProps) {
             value={sizeBytes === null ? '—' : formatBytes(sizeBytes)}
           />
         </View>
+
+        {optimized ? (
+          <Banner message="Already optimized — compressing this video would not make it smaller." />
+        ) : (
+          <View style={styles.tiers}>
+            <AppText variant="captionStrong" tone="muted">
+              QUALITY
+            </AppText>
+            <TierSelector facts={facts} value={tier} onChange={setTier} />
+          </View>
+        )}
       </ScrollView>
     </Screen>
   );
@@ -63,6 +93,16 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** HD is the default (§3.2), unless the source has outgrown it. */
+function defaultEligibleTier(
+  facts: Parameters<typeof isAlreadyOptimized>[0]
+): QualityTierId | null {
+  if (evaluateTier(tierById(DEFAULT_TIER_ID), facts).eligible) {
+    return DEFAULT_TIER_ID;
+  }
+  return evaluateTier(tierById('fullHd'), facts).eligible ? 'fullHd' : null;
+}
+
 const styles = StyleSheet.create({
   bar: { paddingHorizontal: spacing.sm, alignItems: 'flex-start' },
   content: { padding: spacing.lg, gap: spacing.lg },
@@ -71,8 +111,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.lg,
     padding: spacing.lg,
-    borderRadius: spacing.md,
+    borderRadius: radius.md,
     backgroundColor: colors.surface,
   },
   stat: { flex: 1, gap: 2 },
+  tiers: { gap: spacing.sm },
 });
