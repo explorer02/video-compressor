@@ -1,25 +1,54 @@
 {
   "expo": {
-    "name": "video-compressor",
+    "name": "CompressHD",
     "slug": "video-compressor",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.compresshd.app",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "CompressHD needs access to your videos so you can browse and compress them.",
+        "NSPhotoLibraryAddUsageDescription": "CompressHD saves compressed videos back to your photo library.",
+        "UIBackgroundModes": ["processing"]
+      }
     },
     "android": {
+      "package": "com.compresshd.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PROCESSING"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-dev-client",
+      "expo-video",
+      "react-native-compressor",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "CompressHD needs access to your videos so you can browse and compress them.",
+          "savePhotosPermission": "CompressHD saves compressed videos back to your photo library.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ]
+    ]
   }
 }
