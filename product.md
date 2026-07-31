@@ -150,9 +150,10 @@ No batch compression, no trimming/editing, no photos, no cloud upload, no custom
 Every feature added, changed, or removed gets an entry here (newest first). Sections 1–11 stay as the
 original spec — append here instead of rewriting them.
 
-| Date       | Change                                                                                                                                                       |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Date       | Change                                                                                                                                                          |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-07-31 | Project initialized: Expo SDK 57 blank-typescript scaffold, §2 dependencies installed, native config (permissions, plugins, background modes). No features yet. |
+| 2026-08-01 | Tooling: ESLint (`eslint-config-expo`) + Prettier (`eslint-config-prettier`), with `lint` / `format` / `format:check` scripts. No product behavior change.      |
 
 ## 13. Acceptance criteria
 
