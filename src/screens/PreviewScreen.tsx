@@ -3,10 +3,8 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 
 import type { CompressionOutcome } from '../core/compression/types';
 import { formatBytes, formatSavingPercent } from '../core/format';
-import {
-  useSaveOutcome,
-  type SaveMode,
-} from '../features/outcome/useSaveOutcome';
+import { canKeepOriginalMetadata } from '../core/metadata';
+import { useSaveOutcome } from '../features/outcome/useSaveOutcome';
 import { colors, radius, spacing } from '../theme';
 import { AppText, Button, Screen, useToast } from '../ui';
 
@@ -70,7 +68,23 @@ export function PreviewScreen({ outcome, onFinished }: PreviewScreenProps) {
       </ScrollView>
 
       <View style={styles.actions}>
-        <SaveButton mode="fresh" busy={save.busy} onPress={save.saveCopy} />
+        {canKeepOriginalMetadata ? (
+          <Button
+            label="Save as copy"
+            hint="Keeps the original capture date"
+            busy={save.busy}
+            onPress={() => save.saveCopy('original')}
+          />
+        ) : null}
+        <Button
+          label={
+            canKeepOriginalMetadata ? 'Save with a new date' : 'Save as copy'
+          }
+          variant={canKeepOriginalMetadata ? 'secondary' : 'primary'}
+          hint="Creation date is today, location not carried over"
+          busy={save.busy}
+          onPress={() => save.saveCopy('fresh')}
+        />
         <Button
           label="Discard"
           variant="secondary"
@@ -79,25 +93,6 @@ export function PreviewScreen({ outcome, onFinished }: PreviewScreenProps) {
         />
       </View>
     </Screen>
-  );
-}
-
-function SaveButton({
-  mode,
-  busy,
-  onPress,
-}: {
-  mode: SaveMode;
-  busy: boolean;
-  onPress: (mode: SaveMode) => void;
-}) {
-  return (
-    <Button
-      label="Save as copy"
-      hint="Creation date is today, location not carried over"
-      busy={busy}
-      onPress={() => onPress(mode)}
-    />
   );
 }
 

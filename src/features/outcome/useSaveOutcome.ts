@@ -1,6 +1,10 @@
 import { useCallback, useState } from 'react';
 
 import type { CompressionOutcome } from '../../core/compression/types';
+import {
+  applySavedAssetMetadata,
+  type AppliedMetadataReport,
+} from '../../core/metadata';
 import { saveToLibrary } from '../../core/videoLibrary';
 import { workspace } from '../../core/workspace';
 
@@ -40,10 +44,15 @@ export function useSaveOutcome({
 
       void (async () => {
         try {
-          await saveToLibrary(outcome.outputPath);
+          const savedAssetId = await saveToLibrary(outcome.outputPath);
+          const report =
+            mode === 'original'
+              ? await applySavedAssetMetadata(savedAssetId, outcome.source)
+              : null;
+
           // The gallery has its own copy now; ours is just a temp file.
           workspace.discard(outcome.outputPath);
-          onSaved(savedMessage(mode));
+          onSaved(savedMessage(mode, report));
         } catch (error) {
           console.warn('[outcome] failed to save copy', error);
           onFailed('Could not save the compressed video.');
@@ -63,8 +72,16 @@ export function useSaveOutcome({
   return { busy, saveCopy, discard };
 }
 
-function savedMessage(mode: SaveMode): string {
-  return mode === 'original'
-    ? 'Saved to your gallery with the original date and location.'
-    : 'Saved to your gallery.';
+/** §8 requires that fields which could not be carried over are surfaced, not silently dropped. */
+function savedMessage(
+  mode: SaveMode,
+  report: AppliedMetadataReport | null
+): string {
+  if (mode === 'fresh') return 'Saved to your gallery.';
+  if (!report || report.applied.length === 0) {
+    return 'Saved to your gallery, but the original date could not be kept.';
+  }
+  return report.skipped.length > 0
+    ? 'Saved with the original date. Location could not be carried over.'
+    : 'Saved with the original date and location.';
 }

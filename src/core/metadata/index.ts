@@ -1,50 +1,106 @@
 import { File } from 'expo-file-system';
 import { getVideoMetaData } from 'react-native-compressor';
 
+import {
+  MediaTools,
+  mediaToolsCapabilities,
+  type AppliedMetadataReport,
+  type NativeVideoProperties,
+} from '../../../modules/media-tools';
 import { ASSUMED_FRAME_RATE } from '../compression/tiers';
 import type { SourceVideo } from '../compression/types';
-import { resolveLocalPath, type LibraryVideo } from '../videoLibrary';
+import {
+  resolveLocalPath,
+  type LibraryVideo,
+  type VideoAssetId,
+} from '../videoLibrary';
 
 /**
  * Everything the app knows about a source video, and everything it writes back onto a saved one
- * (§8). This is the module the native `media-tools` implementation plugs into.
+ * (§8). Native detail lives in `media-tools`; this module decides what to do when a platform
+ * cannot supply a field.
  */
 
-/** Which metadata fields survived the round trip — §8 requires the ones that did not be logged. */
-export type AppliedMetadataReport = {
-  applied: MetadataField[];
-  skipped: { field: MetadataField; reason: string }[];
-};
+export type { AppliedMetadataReport };
 
-export type MetadataField = 'capturedAt' | 'location';
+export const canKeepOriginalMetadata =
+  mediaToolsCapabilities.captureDateWriteBack;
 
 /**
- * Reads the source facts a compression needs: a real path, exact size, and the capture metadata
- * that "keep original metadata" will copy forward.
+ * Reads the facts a compression needs: a real path, exact size, and the capture metadata that
+ * "keep original metadata" will copy forward.
  *
- * Frame rate, rotation and GPS need a platform API that no current dependency exposes —
- * `getVideoMetaData` returns only extension, size, duration, width and height — so they fall back
- * to safe defaults until the native module lands.
+ * `getVideoMetaData` returns only extension, size, duration, width and height — no frame rate,
+ * rotation or GPS — so those come from the native module, and fall back to safe defaults on a
+ * platform that cannot supply them.
  */
 export async function readSourceVideo(
   video: LibraryVideo
 ): Promise<SourceVideo> {
   const path = await resolveLocalPath(video.id);
-  const probe = await getVideoMetaData(path);
+  const [probe, native] = await Promise.all([
+    getVideoMetaData(path),
+    readNativeProperties(video.id),
+  ]);
   const file = new File(path);
 
   return {
     assetId: video.id,
     path,
-    sizeBytes: file.exists && file.size > 0 ? file.size : probe.size,
-    width: probe.width || video.width || 0,
-    height: probe.height || video.height || 0,
+    sizeBytes: firstPositive(
+      native?.sizeBytes,
+      file.exists ? file.size : null,
+      probe.size
+    ),
+    width: firstPositive(probe.width, video.width),
+    height: firstPositive(probe.height, video.height),
     // `getVideoMetaData` reports seconds; everything above this module works in milliseconds.
-    durationMs:
-      probe.duration > 0 ? probe.duration * 1000 : (video.durationMs ?? 0),
-    frameRate: ASSUMED_FRAME_RATE,
-    rotationDegrees: 0,
-    capturedAt: video.createdAt,
-    location: null,
+    durationMs: firstPositive(probe.duration * 1000, video.durationMs),
+    frameRate: firstPositive(native?.frameRate) || ASSUMED_FRAME_RATE,
+    rotationDegrees: native?.rotationDegrees ?? 0,
+    capturedAt: native?.capturedAtMs ?? video.createdAt,
+    location: native?.location ?? null,
   };
+}
+
+/**
+ * §8: copies the source's capture date and location onto a newly saved asset.
+ *
+ * The report names every field that could not be carried over, which is the logging §8 asks for —
+ * and the same channel through which a platform without an implementation reports itself.
+ */
+export async function applySavedAssetMetadata(
+  savedAssetId: VideoAssetId,
+  source: SourceVideo
+): Promise<AppliedMetadataReport> {
+  const report = await MediaTools.applyAssetMetadata(savedAssetId, {
+    ...(source.capturedAt !== null ? { capturedAtMs: source.capturedAt } : {}),
+    ...(source.location ?? {}),
+  });
+
+  for (const { field, reason } of report.skipped) {
+    console.warn(`[metadata] ${field} was not carried over: ${reason}`);
+  }
+
+  return report;
+}
+
+async function readNativeProperties(
+  assetId: VideoAssetId
+): Promise<NativeVideoProperties | null> {
+  if (!mediaToolsCapabilities.videoProperties) return null;
+
+  try {
+    return await MediaTools.readVideoProperties(assetId);
+  } catch (error) {
+    console.warn('[metadata] native video properties unavailable', error);
+    return null;
+  }
+}
+
+function firstPositive(...candidates: (number | null | undefined)[]): number {
+  for (const candidate of candidates) {
+    if (typeof candidate === 'number' && candidate > 0) return candidate;
+  }
+  return 0;
 }

@@ -1,0 +1,12 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <application>
+    <!--
+      mediaProcessing is the correct type for a user-initiated encode on API 34+; dataSync is the
+      fallback for older platforms, which ignore the flag they do not recognise.
+    -->
+    <service
+      android:name=".CompressionForegroundService"
+      android:exported="false"
+      android:foregroundServiceType="mediaProcessing|dataSync" />
+  </application>
+</manifest>

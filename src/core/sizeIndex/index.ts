@@ -1,6 +1,6 @@
 import { openJsonStore } from '../storage';
 import type { LibraryVideo, VideoAssetId } from '../videoLibrary';
-import { filesystemSizeReader, type AssetSizeReader } from './reader';
+import { assetSizeReader, type AssetSizeReader } from './reader';
 
 /**
  * A lazy, persistent index of asset file sizes (§4).
@@ -17,7 +17,7 @@ const BATCH_SIZE = 24;
 
 type SizeEntry = { size: number; modifiedAt: number | null };
 
-const reader: AssetSizeReader = filesystemSizeReader;
+const reader: AssetSizeReader = assetSizeReader;
 const listeners = new Set<() => void>();
 const pending = new Set<VideoAssetId>();
 

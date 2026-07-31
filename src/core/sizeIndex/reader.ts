@@ -1,6 +1,10 @@
 import { Platform } from 'react-native';
 import { File } from 'expo-file-system';
 
+import {
+  MediaTools,
+  mediaToolsCapabilities,
+} from '../../../modules/media-tools';
 import { resolveLocalPath, type VideoAssetId } from '../videoLibrary';
 
 /**
@@ -14,15 +18,25 @@ export type AssetSizeReader = {
   read(ids: VideoAssetId[]): Promise<Map<VideoAssetId, number>>;
 };
 
+/** One media-store cursor for the whole batch — the fast path, and the only one that scales. */
+const nativeSizeReader: AssetSizeReader = {
+  available: true,
+  unavailableReason: null,
+
+  async read(ids) {
+    const sizes = await MediaTools.readAssetSizes(ids);
+    return new Map(Object.entries(sizes));
+  },
+};
+
 /**
- * Filesystem stat via the asset's resolved path.
+ * Filesystem stat via the asset's resolved path — the fallback when the native reader is absent.
  *
  * Android only, deliberately. On Android an asset resolves to a plain `file://` path and a stat is
  * effectively free. On iOS the same call goes through `PHImageManager.requestAVAsset`, which for a
- * slow-motion clip *exports an entire new file* — unacceptable just to learn a size. iOS gets a
- * native `PHAssetResource` reader instead; until then it reports unavailable.
+ * slow-motion clip *exports an entire new file* — unacceptable just to learn a size.
  */
-export const filesystemSizeReader: AssetSizeReader = {
+const filesystemSizeReader: AssetSizeReader = {
   available: Platform.OS === 'android',
   unavailableReason:
     Platform.OS === 'android'
@@ -44,3 +58,6 @@ export const filesystemSizeReader: AssetSizeReader = {
     return sizes;
   },
 };
+
+export const assetSizeReader: AssetSizeReader =
+  mediaToolsCapabilities.assetSizes ? nativeSizeReader : filesystemSizeReader;
