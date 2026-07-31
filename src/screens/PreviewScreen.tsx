@@ -1,5 +1,5 @@
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 
 import type { CompressionOutcome } from '../core/compression/types';
 import { formatBytes, formatSavingPercent } from '../core/format';
@@ -86,8 +86,15 @@ export function PreviewScreen({ outcome, onFinished }: PreviewScreenProps) {
           onPress={() => save.saveCopy('fresh')}
         />
         <Button
+          label="Replace original"
+          variant="danger"
+          hint="Deletes the original video"
+          disabled={save.busy}
+          onPress={() => confirmReplace(save.replaceOriginal)}
+        />
+        <Button
           label="Discard"
-          variant="secondary"
+          variant="ghost"
           onPress={save.discard}
           disabled={save.busy}
         />
@@ -114,6 +121,21 @@ function Measure({
         {value}
       </AppText>
     </View>
+  );
+}
+
+/**
+ * §3.4 — our own warning first. The OS will show its own delete confirmation afterwards, which
+ * cannot be bypassed, but by then the user has already agreed to the intent.
+ */
+function confirmReplace(onConfirm: () => void): void {
+  Alert.alert(
+    'Replace the original?',
+    'The compressed video is saved to your gallery and the original is deleted. This can\u2019t be undone.',
+    [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Replace', style: 'destructive', onPress: onConfirm },
+    ]
   );
 }
 

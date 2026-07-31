@@ -5,7 +5,11 @@ import {
   applySavedAssetMetadata,
   type AppliedMetadataReport,
 } from '../../core/metadata';
-import { saveToLibrary } from '../../core/videoLibrary';
+import {
+  assetExists,
+  deleteAssets,
+  saveToLibrary,
+} from '../../core/videoLibrary';
 import { workspace } from '../../core/workspace';
 
 /**
@@ -26,6 +30,7 @@ export type SaveOutcomeOptions = {
 export type SaveOutcome = {
   busy: boolean;
   saveCopy: (mode: SaveMode) => void;
+  replaceOriginal: () => void;
   discard: () => void;
 };
 
@@ -64,12 +69,46 @@ export function useSaveOutcome({
     [busy, onFailed, onSaved, outcome.outputPath]
   );
 
+  /**
+   * §3.4 — save the copy with the original metadata, then delete the source.
+   *
+   * The OS shows its own confirmation dialog for the delete and cannot be bypassed. `Asset.delete`
+   * resolves to void whether the user confirmed or cancelled, so the only way to know which
+   * happened is to look for the asset afterwards (§10).
+   */
+  const replaceOriginal = useCallback(() => {
+    if (busy) return;
+    setBusy(true);
+
+    void (async () => {
+      try {
+        const savedAssetId = await saveToLibrary(outcome.outputPath);
+        await applySavedAssetMetadata(savedAssetId, outcome.source);
+        workspace.discard(outcome.outputPath);
+
+        await deleteAssets([outcome.source.assetId]);
+        const originalSurvived = await assetExists(outcome.source.assetId);
+
+        onSaved(
+          originalSurvived
+            ? 'Saved the compressed copy. The original was left untouched.'
+            : 'Replaced the original with the compressed version.'
+        );
+      } catch (error) {
+        console.warn('[outcome] failed to replace original', error);
+        onFailed('Could not replace the original video.');
+      } finally {
+        setBusy(false);
+      }
+    })();
+  }, [busy, onFailed, onSaved, outcome.outputPath, outcome.source]);
+
   const discard = useCallback(() => {
     workspace.discard(outcome.outputPath);
     onDiscarded();
   }, [onDiscarded, outcome.outputPath]);
 
-  return { busy, saveCopy, discard };
+  return { busy, saveCopy, replaceOriginal, discard };
 }
 
 /** §8 requires that fields which could not be carried over are surfaced, not silently dropped. */
