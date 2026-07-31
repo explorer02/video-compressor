@@ -11,7 +11,7 @@ import type {
   QualityTierId,
   SourceVideo,
 } from '../../core/compression/types';
-import type { LibraryVideo } from '../../core/videoLibrary/types';
+import type { LibraryVideo } from '../../core/videoLibrary';
 import type { Flow, FlowState } from './types';
 
 const FlowContext = createContext<Flow | null>(null);
@@ -25,18 +25,12 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     () => ({
       state,
       actions: {
-        select: (video: LibraryVideo, source: SourceVideo) =>
-          setState({ name: 'selected', video, source }),
+        select: (video: LibraryVideo) => setState({ name: 'selected', video }),
 
-        startCompressing: (tier: QualityTierId) =>
+        startCompressing: (source: SourceVideo, tier: QualityTierId) =>
           setState(current =>
             current.name === 'selected'
-              ? {
-                  name: 'compressing',
-                  video: current.video,
-                  source: current.source,
-                  tier,
-                }
+              ? { name: 'compressing', video: current.video, source, tier }
               : current
           ),
 
@@ -47,8 +41,8 @@ export function FlowProvider({ children }: { children: ReactNode }) {
 
         backToSelection: () =>
           setState(current => {
-            const selection = selectionOf(current);
-            return selection ? { name: 'selected', ...selection } : LIBRARY;
+            const video = videoOf(current);
+            return video ? { name: 'selected', video } : LIBRARY;
           }),
       },
     }),
@@ -64,16 +58,14 @@ export function useFlow(): Flow {
   return flow;
 }
 
-/** Every state past `library` knows which video it came from — this is where it lives. */
-function selectionOf(
-  state: FlowState
-): { video: LibraryVideo; source: SourceVideo } | null {
+/** Every state past `library` knows which video it came from — this is where that lives. */
+function videoOf(state: FlowState): LibraryVideo | null {
   switch (state.name) {
     case 'selected':
     case 'compressing':
-      return { video: state.video, source: state.source };
+      return state.video;
     case 'preview':
-      return { video: state.outcome.video, source: state.outcome.source };
+      return state.outcome.video;
     case 'library':
       return null;
   }
