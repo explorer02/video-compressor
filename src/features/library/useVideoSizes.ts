@@ -8,6 +8,8 @@ export type VideoSizes = {
   sizeOf: (video: LibraryVideo) => number | null;
   indexing: boolean;
   available: boolean;
+  /** Total bytes of everything indexed so far, or null while the index is still filling. */
+  totalBytes: number | null;
 };
 
 /** Keeps the size index filled for the rows currently loaded, and re-renders as sizes arrive. */
@@ -30,9 +32,13 @@ export function useVideoSizes(videos: LibraryVideo[]): VideoSizes {
     [revision]
   );
 
+  const indexing = sizeIndex.pendingCount() > 0;
+
   return {
     sizeOf,
-    indexing: sizeIndex.pendingCount() > 0,
+    indexing,
     available: sizeIndex.available,
+    totalBytes:
+      indexing || !sizeIndex.available ? null : sizeIndex.knownTotalBytes(),
   };
 }

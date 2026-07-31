@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { sizeIndex } from '../../core/sizeIndex';
 import {
   DEFAULT_SORT,
   listAllVideoIds,
+  listAllVideos,
   listVideos,
   nextSort,
   readStoredSort,
@@ -60,6 +62,8 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
   // Bumped on every load so a slow in-flight page cannot overwrite a newer one.
   const generation = useRef(0);
   const loadingMore = useRef(false);
+  // Sorting by size needs the whole library ranked before any of it can be shown.
+  const sizeSorted = useRef<LibraryVideo[]>(NO_VIDEOS);
 
   // Loading is derived, not stored: a result belonging to a different sort *is* the loading state.
   const current = loaded && sameSort(loaded.sort, sort) ? loaded : null;
@@ -78,6 +82,21 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
 
     void (async () => {
       try {
+        if (sortsBySize(sort)) {
+          const ranked = await rankBySize(sort.direction);
+          if (!active) return;
+
+          sizeSorted.current = ranked;
+          setTotalCount(ranked.length);
+          setLoaded({
+            sort,
+            videos: ranked.slice(0, PAGE_SIZE),
+            hasMore: ranked.length > PAGE_SIZE,
+          });
+          setFailed(false);
+          return;
+        }
+
         const page = await listVideos({
           ...mediaStoreSort(sort),
           limit: PAGE_SIZE,
@@ -91,6 +110,7 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
         if (!active) return;
         console.warn('[library] failed to load videos', error);
         setFailed(true);
+        return;
       } finally {
         if (active) setRefreshing(false);
       }
@@ -129,6 +149,14 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
 
   const loadMore = useCallback(() => {
     if (!enabled || loadingMore.current || !current?.hasMore) return;
+
+    // A size sort is already ranked in memory; paging it is a slice, not another query.
+    if (sortsBySize(sort)) {
+      const ranked = sizeSorted.current;
+      const next = ranked.slice(0, current.videos.length + PAGE_SIZE);
+      setLoaded({ sort, videos: next, hasMore: ranked.length > next.length });
+      return;
+    }
 
     const request = generation.current;
     loadingMore.current = true;
@@ -180,7 +208,7 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
     hasMore: current?.hasMore ?? true,
     totalCount,
     sort,
-    sizeSortAvailable: false,
+    sizeSortAvailable: sizeIndex.available,
     toggleSort,
     loadMore,
     refresh,
@@ -195,7 +223,31 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
 const SIZE_SORT_FALLBACK: MediaStoreSortKey = 'createdAt';
 
 function resolveSort(stored: VideoSort): VideoSort {
-  return stored.key === 'size' ? DEFAULT_SORT : stored;
+  return stored.key === 'size' && !sizeIndex.available ? DEFAULT_SORT : stored;
+}
+
+function sortsBySize(sort: VideoSort): boolean {
+  return sort.key === 'size' && sizeIndex.available;
+}
+
+/**
+ * §4: the media store cannot order by size, so the whole library is indexed and ranked here.
+ * Assets whose size could not be read sort last rather than pretending to be zero bytes.
+ */
+async function rankBySize(
+  direction: VideoSort['direction']
+): Promise<LibraryVideo[]> {
+  const all = await listAllVideos();
+  await sizeIndex.ensure(all);
+
+  const sign = direction === 'asc' ? 1 : -1;
+  return [...all].sort((a, b) => {
+    const sizeA = sizeIndex.get(a);
+    const sizeB = sizeIndex.get(b);
+    if (sizeA === null) return sizeB === null ? 0 : 1;
+    if (sizeB === null) return -1;
+    return (sizeA - sizeB) * sign;
+  });
 }
 
 function mediaStoreSort(sort: VideoSort): {

@@ -2,6 +2,7 @@ import { FlashList } from '@shopify/flash-list';
 import { useCallback } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
+import { formatBytes } from '../core/format';
 import type { LibraryVideo, MediaAccessState } from '../core/videoLibrary';
 import { SortToolbar } from '../features/library/SortToolbar';
 import { useVideoBrowser } from '../features/library/useVideoBrowser';
@@ -39,7 +40,13 @@ export function LibraryScreen({ access, onSelect }: LibraryScreenProps) {
       <View style={styles.header}>
         <AppText variant="title">Videos</AppText>
         <AppText variant="caption" tone="muted">
-          {headerSubtitle(browser.totalCount, browser.videos.length)}
+          {sizes.indexing
+            ? 'Indexing sizes…'
+            : headerSubtitle(
+                browser.totalCount,
+                browser.videos.length,
+                sizes.totalBytes
+              )}
         </AppText>
       </View>
 
@@ -135,10 +142,15 @@ function keyExtractor(video: LibraryVideo): string {
   return video.id;
 }
 
-function headerSubtitle(totalCount: number | null, loaded: number): string {
-  if (totalCount !== null)
-    return `${totalCount} ${plural(totalCount, 'video')}`;
-  return loaded > 0 ? `${loaded}+ videos` : 'Loading…';
+function headerSubtitle(
+  totalCount: number | null,
+  loaded: number,
+  totalBytes: number | null
+): string {
+  if (totalCount === null) return loaded > 0 ? `${loaded}+ videos` : 'Loading…';
+
+  const count = `${totalCount} ${plural(totalCount, 'video')}`;
+  return totalBytes === null ? count : `${count} · ${formatBytes(totalBytes)}`;
 }
 
 function plural(count: number, word: string): string {
