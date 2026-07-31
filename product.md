@@ -154,6 +154,8 @@ original spec — append here instead of rewriting them.
 | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-07-31 | Project initialized: Expo SDK 57 blank-typescript scaffold, §2 dependencies installed, native config (permissions, plugins, background modes). No features yet. |
 | 2026-08-01 | Tooling: ESLint (`eslint-config-expo`) + Prettier (`eslint-config-prettier`), with `lint` / `format` / `format:check` scripts. No product behavior change.      |
+| 2026-08-01 | Foundations: design tokens, UI primitives, JSON key-value storage, §3 flow state machine, and domain types. Added `react-native-nitro-modules` (required peer of react-native-compressor 2.x), `expo-file-system`, `expo-image`, `react-native-safe-area-context`. Native config: media-library `granularPermissions: ["video"]` (required for Android 14 partial-access detection), `FOREGROUND_SERVICE_DATA_SYNC`, and removal of the unused iOS `UIBackgroundModes`. No user-visible behavior yet. |
+| 2026-08-01 | Scope: Android ships first. iOS-specific capabilities (metadata write-back, native asset sizes, background task) sit behind the same typed interfaces and report as unsupported until they are implemented. |
 
 ## 13. Acceptance criteria
 

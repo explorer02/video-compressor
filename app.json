@@ -11,8 +11,7 @@
       "bundleIdentifier": "com.compresshd.app",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "CompressHD needs access to your videos so you can browse and compress them.",
-        "NSPhotoLibraryAddUsageDescription": "CompressHD saves compressed videos back to your photo library.",
-        "UIBackgroundModes": ["processing"]
+        "NSPhotoLibraryAddUsageDescription": "CompressHD saves compressed videos back to your photo library."
       }
     },
     "android": {
@@ -31,7 +30,8 @@
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_MEDIA_PROCESSING"
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PROCESSING",
+        "android.permission.FOREGROUND_SERVICE_DATA_SYNC"
       ]
     },
     "web": {
@@ -46,7 +46,8 @@
         {
           "photosPermission": "CompressHD needs access to your videos so you can browse and compress them.",
           "savePhotosPermission": "CompressHD saves compressed videos back to your photo library.",
-          "isAccessMediaLocationEnabled": true
+          "isAccessMediaLocationEnabled": true,
+          "granularPermissions": ["video"]
         }
       ]
     ]
