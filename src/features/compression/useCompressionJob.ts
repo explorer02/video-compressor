@@ -4,7 +4,11 @@ import { useKeepAwake } from 'expo-keep-awake';
 
 import { beginBackgroundSession } from '../../core/background';
 import { compressToTier } from '../../core/compression/reactNativeCompressor';
-import { estimateOutputBytes, tierById } from '../../core/compression/tiers';
+import {
+  estimateOutputBytes,
+  tierById,
+  type QualityTier,
+} from '../../core/compression/tiers';
 import type {
   CompressionOutcome,
   QualityTierId,
@@ -111,6 +115,7 @@ export function useCompressionJob({
         if (!active) return;
 
         workspace.markJobFinished();
+        logEstimateAccuracy(tier, source, outcome.outputSizeBytes);
         onCompleted(outcome);
       } catch (error) {
         if (!active) return;
@@ -171,6 +176,22 @@ async function adoptOutput(
 function outputFilename(video: LibraryVideo, tierId: QualityTierId): string {
   const stem = video.filename.replace(/\.[^.]+$/, '') || 'video';
   return `${stem}-${tierId}.mp4`;
+}
+
+/** §6: the estimate is only as good as the feedback loop, so record how close each one landed. */
+function logEstimateAccuracy(
+  tier: QualityTier,
+  source: SourceVideo,
+  actualBytes: number
+): void {
+  const estimated = estimateOutputBytes(tier, source);
+  if (estimated === null || actualBytes <= 0) return;
+
+  const driftPercent = Math.round((actualBytes / estimated - 1) * 100);
+  console.log(
+    `[estimate] tier=${tier.id} fps=${source.frameRate} estimated=${estimated}B ` +
+      `actual=${actualBytes}B drift=${driftPercent > 0 ? '+' : ''}${driftPercent}%`
+  );
 }
 
 function remainingLabel(etaMs: number | null): string {

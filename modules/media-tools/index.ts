@@ -56,9 +56,29 @@ type MediaToolsNative = {
   stopCompressionService: () => Promise<void>;
 };
 
-const native = requireNativeModule<MediaToolsNative>('MediaTools');
+const NO_CAPABILITIES: MediaToolsCapabilities = {
+  videoProperties: false,
+  assetSizes: false,
+  captureDateWriteBack: false,
+  locationWriteBack: false,
+  foregroundService: false,
+};
 
-export const MediaTools = native;
+export const MediaTools = requireNativeModule<MediaToolsNative>('MediaTools');
 
+/**
+ * Read once at startup. If the native side is missing — a JS bundle running against a build that
+ * predates this module — every capability reads false and the app degrades instead of crashing on
+ * import.
+ */
 export const mediaToolsCapabilities: MediaToolsCapabilities =
-  native.getCapabilities();
+  readCapabilities();
+
+function readCapabilities(): MediaToolsCapabilities {
+  try {
+    return MediaTools.getCapabilities();
+  } catch (error) {
+    console.warn('[media-tools] native module unavailable', error);
+    return NO_CAPABILITIES;
+  }
+}
