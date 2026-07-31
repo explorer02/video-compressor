@@ -8,26 +8,33 @@ import {
   sourceFactsFrom,
   tierById,
 } from '../core/compression/tiers';
-import type { QualityTierId } from '../core/compression/types';
+import type { QualityTierId, SourceVideo } from '../core/compression/types';
 import {
   formatBytes,
   formatDurationWords,
   formatResolution,
 } from '../core/format';
+import { readSourceVideo } from '../core/metadata';
 import { sizeIndex } from '../core/sizeIndex';
 import type { LibraryVideo } from '../core/videoLibrary';
 import { TierSelector } from '../features/compression/TierSelector';
 import { VideoThumbnail } from '../features/library/VideoThumbnail';
 import { colors, radius, spacing } from '../theme';
-import { AppText, Banner, Button, Screen } from '../ui';
+import { AppText, Banner, Button, Screen, useToast } from '../ui';
 
 export type SelectedScreenProps = {
   video: LibraryVideo;
   onBack: () => void;
+  onStart: (source: SourceVideo, tier: QualityTierId) => void;
 };
 
 /** §3.2 — the chosen video, its original stats, and the quality tier to compress it to. */
-export function SelectedScreen({ video, onBack }: SelectedScreenProps) {
+export function SelectedScreen({
+  video,
+  onBack,
+  onStart,
+}: SelectedScreenProps) {
+  const toast = useToast();
   const sizeBytes = sizeIndex.get(video);
   const facts = useMemo(
     () => sourceFactsFrom(video, sizeBytes),
@@ -37,7 +44,26 @@ export function SelectedScreen({ video, onBack }: SelectedScreenProps) {
   const [tier, setTier] = useState<QualityTierId | null>(() =>
     defaultEligibleTier(facts)
   );
+  const [resolving, setResolving] = useState(false);
   const optimized = isAlreadyOptimized(facts);
+
+  // Resolving a real path is the expensive call, so it happens once, here, on the way to encoding.
+  const start = () => {
+    if (!tier || resolving) return;
+    setResolving(true);
+
+    void (async () => {
+      try {
+        onStart(await readSourceVideo(video), tier);
+      } catch (error) {
+        console.warn('[selected] failed to read source video', error);
+        toast.show('That video is no longer available.', 'danger');
+        onBack();
+      } finally {
+        setResolving(false);
+      }
+    })();
+  };
 
   return (
     <Screen>
@@ -78,6 +104,17 @@ export function SelectedScreen({ video, onBack }: SelectedScreenProps) {
           </View>
         )}
       </ScrollView>
+
+      {optimized ? null : (
+        <View style={styles.actions}>
+          <Button
+            label="Compress"
+            onPress={start}
+            disabled={tier === null}
+            busy={resolving}
+          />
+        </View>
+      )}
     </Screen>
   );
 }
@@ -116,4 +153,5 @@ const styles = StyleSheet.create({
   },
   stat: { flex: 1, gap: 2 },
   tiers: { gap: spacing.sm },
+  actions: { padding: spacing.lg },
 });

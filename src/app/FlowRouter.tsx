@@ -2,9 +2,12 @@ import { useEffect } from 'react';
 import { BackHandler } from 'react-native';
 
 import { useMediaAccess } from '../core/videoLibrary';
+import { workspace } from '../core/workspace';
+import { CompressingScreen } from '../screens/CompressingScreen';
 import { LibraryScreen } from '../screens/LibraryScreen';
 import { PermissionGateScreen } from '../screens/PermissionGateScreen';
 import { SelectedScreen } from '../screens/SelectedScreen';
+import { useToast } from '../ui';
 import { useFlow } from './flow/FlowProvider';
 
 /**
@@ -16,6 +19,7 @@ export function FlowRouter() {
   const { state, actions } = useFlow();
 
   useAndroidBack(state.name !== 'library', actions.backToLibrary);
+  useInterruptedJobNotice();
 
   if (access.access !== 'granted' && access.access !== 'limited') {
     return <PermissionGateScreen access={access} />;
@@ -26,12 +30,24 @@ export function FlowRouter() {
       return <LibraryScreen access={access} onSelect={actions.select} />;
     case 'selected':
       return (
-        <SelectedScreen video={state.video} onBack={actions.backToLibrary} />
+        <SelectedScreen
+          video={state.video}
+          onBack={actions.backToLibrary}
+          onStart={actions.startCompressing}
+        />
       );
     case 'compressing':
+      return (
+        <CompressingScreen
+          video={state.video}
+          source={state.source}
+          tier={state.tier}
+          onCompleted={actions.showPreview}
+          onCancelled={actions.backToSelection}
+        />
+      );
     case 'preview':
-      // Unreachable until the compression and preview screens land; nothing can enter these
-      // states yet because the tier picker is what starts a job.
+      // Unreachable until the preview screen lands; a completed job cannot be reached before then.
       return <LibraryScreen access={access} onSelect={actions.select} />;
   }
 }
@@ -49,4 +65,19 @@ function useAndroidBack(active: boolean, onBack: () => void): void {
     );
     return () => subscription.remove();
   }, [active, onBack]);
+}
+
+/**
+ * §10: a job that was running when the app stopped leaves temp files behind. Clearing them and
+ * saying so is the honest recovery — the user can start the compression again from the library.
+ */
+function useInterruptedJobNotice(): void {
+  const toast = useToast();
+
+  useEffect(() => {
+    const interrupted = workspace.recoverOnLaunch();
+    if (interrupted) {
+      toast.show('A compression was interrupted — you can start it again.');
+    }
+  }, [toast]);
 }
