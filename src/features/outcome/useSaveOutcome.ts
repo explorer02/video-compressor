@@ -66,7 +66,7 @@ export function useSaveOutcome({
         }
       })();
     },
-    [busy, onFailed, onSaved, outcome.outputPath]
+    [busy, onFailed, onSaved, outcome.outputPath, outcome.source]
   );
 
   /**
