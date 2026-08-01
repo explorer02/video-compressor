@@ -59,12 +59,18 @@ export async function readSourceVideo(
     frameRate: firstPositive(native?.frameRate) || ASSUMED_FRAME_RATE,
     rotationDegrees: native?.rotationDegrees ?? 0,
     capturedAt: native?.capturedAtMs ?? video.createdAt,
+    modifiedAt: video.modifiedAt,
     location: native?.location ?? null,
   };
 }
 
 /**
- * §8: copies the source's capture date and location onto a newly saved asset.
+ * §8: copies the source's dates — and, where the platform supports it, its location — onto a newly
+ * saved asset.
+ *
+ * Location is sent only when the platform can actually store it. Android cannot (the media store's
+ * location columns were removed in Android 10), so asking would only produce a skip entry for
+ * something the user was never promised.
  *
  * The report names every field that could not be carried over, which is the logging §8 asks for —
  * and the same channel through which a platform without an implementation reports itself.
@@ -75,7 +81,10 @@ export async function applySavedAssetMetadata(
 ): Promise<AppliedMetadataReport> {
   const report = await MediaTools.applyAssetMetadata(savedAssetId, {
     ...(source.capturedAt !== null ? { capturedAtMs: source.capturedAt } : {}),
-    ...(source.location ?? {}),
+    ...(source.modifiedAt !== null ? { modifiedAtMs: source.modifiedAt } : {}),
+    ...(mediaToolsCapabilities.locationWriteBack && source.location
+      ? source.location
+      : {}),
   });
 
   for (const { field, reason } of report.skipped) {

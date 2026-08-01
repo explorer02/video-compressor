@@ -16,6 +16,8 @@ export type SourceVideo = {
   rotationDegrees: number;
   /** Epoch milliseconds of original capture, when the platform records it. */
   capturedAt: number | null;
+  /** Epoch milliseconds the source was last modified. */
+  modifiedAt: number | null;
   location: { latitude: number; longitude: number } | null;
 };
 

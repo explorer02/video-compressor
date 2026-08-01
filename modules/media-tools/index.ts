@@ -27,7 +27,7 @@ export type NativeVideoProperties = {
   location: GeoLocation | null;
 };
 
-export type MetadataField = 'capturedAt' | 'location';
+export type MetadataField = 'capturedAt' | 'modifiedAt' | 'location';
 
 export type AppliedMetadataReport = {
   applied: MetadataField[];
@@ -49,7 +49,12 @@ type MediaToolsNative = {
   readAssetSizes: (assetIds: string[]) => Promise<Record<string, number>>;
   applyAssetMetadata: (
     assetId: string,
-    metadata: { capturedAtMs?: number; latitude?: number; longitude?: number }
+    metadata: {
+      capturedAtMs?: number;
+      modifiedAtMs?: number;
+      latitude?: number;
+      longitude?: number;
+    }
   ) => Promise<AppliedMetadataReport>;
   startCompressionService: (options: ServiceNotification) => Promise<void>;
   updateCompressionProgress: (options: ServiceNotification) => Promise<void>;

@@ -74,7 +74,7 @@ export function PreviewScreen({ outcome, onFinished }: PreviewScreenProps) {
         {canKeepOriginalMetadata ? (
           <Button
             label="Save as copy"
-            hint="Keeps the original capture date"
+            hint="Keeps the original dates"
             busy={save.busy}
             onPress={() => save.saveCopy('original')}
           />

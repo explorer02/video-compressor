@@ -13,6 +13,7 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.records.Field
 import expo.modules.kotlin.records.Record
+import java.io.File
 
 /**
  * The four things the app needs that no JavaScript dependency can provide (§7, §8):
@@ -161,32 +162,46 @@ class MediaToolsModule : Module() {
       if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getLong(0) else null
     }
 
+  private fun queryString(uri: Uri, column: String): String? =
+    runCatching {
+      context.contentResolver.query(uri, arrayOf(column), null, null, null)?.use { cursor ->
+        if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getString(0) else null
+      }
+    }.getOrNull()
+
   // MARK: - Metadata write-back
 
   /**
-   * §8: carries the original capture date onto a newly saved asset.
+   * §8: carries the original capture and modified dates onto a newly saved asset.
    *
-   * Location cannot follow it. `MediaStore.Video.Media.LATITUDE`/`LONGITUDE` were removed in
-   * Android 10, and writing an ISO-6709 `©xyz` atom into the MP4 would need a muxer we do not
-   * have — so it is reported as skipped rather than silently dropped.
+   * Every field is verified by reading it back, because a write the provider silently ignored looks
+   * exactly like a successful one — and §8 asks for what could not be carried over, not for what we
+   * attempted.
+   *
+   * Location cannot follow. `MediaStore.Video.Media.LATITUDE`/`LONGITUDE` were removed in Android
+   * 10, and writing an ISO-6709 `©xyz` atom into the MP4 would need a muxer we do not have.
    */
   private fun applyAssetMetadata(
     assetId: String,
     metadata: AssetMetadataInput
   ): Map<String, Any> {
+    val uri = Uri.parse(assetId)
     val applied = mutableListOf<String>()
     val skipped = mutableListOf<Map<String, String>>()
 
     metadata.capturedAtMs?.let { capturedAt ->
-      val values = ContentValues().apply {
-        put(MediaStore.Video.Media.DATE_TAKEN, capturedAt.toLong())
+      // DATE_TAKEN is milliseconds.
+      val millis = capturedAt.toLong()
+      if (writeAndVerify(uri, MediaStore.Video.Media.DATE_TAKEN, millis)) {
+        applied.add("capturedAt")
+      } else {
+        skipped.add(field("capturedAt", "The media store rejected the capture date."))
       }
-      val updated = runCatching {
-        context.contentResolver.update(Uri.parse(assetId), values, null, null)
-      }.getOrDefault(0)
+    }
 
-      if (updated > 0) applied.add("capturedAt")
-      else skipped.add(field("capturedAt", "The media store rejected the capture date update."))
+    metadata.modifiedAtMs?.let { modifiedAt ->
+      if (applyModifiedAt(uri, modifiedAt.toLong())) applied.add("modifiedAt")
+      else skipped.add(field("modifiedAt", "The media store keeps its own modified date."))
     }
 
     if (metadata.latitude != null && metadata.longitude != null) {
@@ -199,6 +214,33 @@ class MediaToolsModule : Module() {
     }
 
     return mapOf("applied" to applied, "skipped" to skipped)
+  }
+
+  /**
+   * DATE_MODIFIED is seconds, and providers routinely recompute it from the file rather than
+   * honouring the written value — so when the column write does not stick, stamp the file itself
+   * and write again.
+   */
+  private fun applyModifiedAt(uri: Uri, modifiedAtMs: Long): Boolean {
+    val seconds = modifiedAtMs / 1000
+    if (writeAndVerify(uri, MediaStore.MediaColumns.DATE_MODIFIED, seconds)) return true
+
+    if (!stampUnderlyingFile(uri, modifiedAtMs)) return false
+    return writeAndVerify(uri, MediaStore.MediaColumns.DATE_MODIFIED, seconds)
+  }
+
+  private fun writeAndVerify(uri: Uri, column: String, value: Long): Boolean {
+    val values = ContentValues().apply { put(column, value) }
+    val updated = runCatching {
+      context.contentResolver.update(uri, values, null, null)
+    }.getOrDefault(0)
+
+    return updated > 0 && queryLong(uri, column) == value
+  }
+
+  private fun stampUnderlyingFile(uri: Uri, modifiedAtMs: Long): Boolean {
+    val path = queryString(uri, MediaStore.MediaColumns.DATA) ?: return false
+    return runCatching { File(path).setLastModified(modifiedAtMs) }.getOrDefault(false)
   }
 
   private fun field(name: String, reason: String) = mapOf("field" to name, "reason" to reason)
@@ -231,6 +273,8 @@ class ServiceNotification : Record {
 
 class AssetMetadataInput : Record {
   @Field val capturedAtMs: Double? = null
+
+  @Field val modifiedAtMs: Double? = null
 
   @Field val latitude: Double? = null
 

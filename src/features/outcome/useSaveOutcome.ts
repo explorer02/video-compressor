@@ -111,16 +111,23 @@ export function useSaveOutcome({
   return { busy, saveCopy, replaceOriginal, discard };
 }
 
-/** §8 requires that fields which could not be carried over are surfaced, not silently dropped. */
+/**
+ * §8 requires that fields which could not be carried over are surfaced, not silently dropped.
+ *
+ * The claim is built from what was actually applied rather than from an empty skip list: a field
+ * the source never had produces neither an applied nor a skipped entry, so an absent skip is not
+ * evidence that anything was carried over.
+ */
 function savedMessage(
   mode: SaveMode,
   report: AppliedMetadataReport | null
 ): string {
   if (mode === 'fresh') return 'Saved to your gallery.';
-  if (!report || report.applied.length === 0) {
-    return 'Saved to your gallery, but the original date could not be kept.';
+
+  const applied = new Set(report?.applied ?? []);
+  if (applied.has('capturedAt') && applied.has('modifiedAt')) {
+    return 'Saved with the original dates.';
   }
-  return report.skipped.length > 0
-    ? 'Saved with the original date. Location could not be carried over.'
-    : 'Saved with the original date and location.';
+  if (applied.has('capturedAt')) return 'Saved with the original capture date.';
+  return 'Saved to your gallery, but the original dates could not be kept.';
 }

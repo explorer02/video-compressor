@@ -15,6 +15,8 @@ import ExpoModulesCore
  * - `readAssetSizes`       → `PHAssetResource` file size, falling back to a `URLResourceValues`
  *                            stat, which is what unlocks sorting the browser by file size.
  * - `applyAssetMetadata`   → `PHAssetChangeRequest.creationDate` / `.location` on the saved asset.
+ *                            iOS has no separate modified date to set, so `modifiedAt` stays
+ *                            skipped there rather than being faked.
  * - Service functions      → no-ops by design; iOS has no foreground service. Background
  *                            continuation uses the compressor's own background task instead.
  */
@@ -45,6 +47,7 @@ public class MediaToolsModule: Module {
         "applied": [String](),
         "skipped": [
           ["field": "capturedAt", "reason": Self.notImplemented],
+          ["field": "modifiedAt", "reason": Self.notImplemented],
           ["field": "location", "reason": Self.notImplemented]
         ]
       ]
@@ -71,6 +74,8 @@ struct ServiceNotification: Record {
 
 struct AssetMetadataInput: Record {
   @Field var capturedAtMs: Double?
+
+  @Field var modifiedAtMs: Double?
 
   @Field var latitude: Double?
 
