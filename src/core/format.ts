@@ -67,11 +67,11 @@ export function formatDateTime(epochMs: number | null): string {
 export function formatFolder(path: string | null): string {
   if (!path) return '—';
 
-  const segments = decodeURI(path)
-    .replace(/^\w+:\/\//, '')
-    .split('/')
-    .filter(Boolean);
-  const directory = segments.slice(0, -1);
+  const cleaned = decodeURI(path).replace(/^\w+:\/\//, '');
+  const segments = cleaned.split('/').filter(Boolean);
+  // A media-store relative path is already a directory ("DCIM/Camera/"); a file path is not.
+  const directory = cleaned.endsWith('/') ? segments : segments.slice(0, -1);
+
   return directory.length === 0 ? '—' : directory.slice(-2).join('/');
 }
 

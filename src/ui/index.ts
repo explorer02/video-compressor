@@ -1,6 +1,11 @@
 export { AppText, type AppTextProps } from './AppText';
 export { Banner, type BannerProps } from './Banner';
 export { Button, type ButtonProps } from './Button';
+export {
+  DetailList,
+  type DetailItem,
+  type DetailListProps,
+} from './DetailList';
 export { EmptyState, type EmptyStateProps } from './EmptyState';
 export { Screen } from './Screen';
 export {

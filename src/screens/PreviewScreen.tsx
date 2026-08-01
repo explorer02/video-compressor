@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 
 import type { CompressionOutcome } from '../core/compression/types';
@@ -10,15 +11,19 @@ import {
   formatSavingPercent,
 } from '../core/format';
 import { canKeepOriginalMetadata } from '../core/metadata';
+import { playbackSource } from '../core/videoLibrary';
 import { useSaveOutcome } from '../features/outcome/useSaveOutcome';
 import { colors, radius, spacing } from '../theme';
 import {
   AppText,
   Button,
+  DetailList,
   Screen,
+  SegmentedControl,
   useHardwareBack,
   useToast,
   VideoStage,
+  type Segment,
 } from '../ui';
 
 export type PreviewScreenProps = {
@@ -27,8 +32,16 @@ export type PreviewScreenProps = {
 };
 
 /** §3.4 — watch the result, see what it saved, then decide what happens to it. */
+type Showing = 'original' | 'compressed';
+
+const COMPARE_SEGMENTS: Segment<Showing>[] = [
+  { value: 'original', label: 'Original' },
+  { value: 'compressed', label: 'Compressed' },
+];
+
 export function PreviewScreen({ outcome, onFinished }: PreviewScreenProps) {
   const toast = useToast();
+  const [showing, setShowing] = useState<Showing>('compressed');
 
   const save = useSaveOutcome({
     outcome,
@@ -51,7 +64,23 @@ export function PreviewScreen({ outcome, onFinished }: PreviewScreenProps) {
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.content}>
-        <VideoStage source={outcome.outputPath} autoPlay loop />
+        {/* One player, two sources: flipping between them on the same scene is what makes a
+            quality difference visible, which two small players side by side would not. */}
+        <SegmentedControl
+          segments={COMPARE_SEGMENTS}
+          value={showing}
+          onChange={setShowing}
+        />
+
+        <VideoStage
+          source={
+            showing === 'original'
+              ? playbackSource(outcome.video.id)
+              : outcome.outputPath
+          }
+          autoPlay
+          loop
+        />
 
         <View style={styles.comparison}>
           <Measure
@@ -119,33 +148,20 @@ function SourceDetails({ outcome }: { outcome: CompressionOutcome }) {
   const coordinates = formatCoordinates(source.location);
 
   return (
-    <View style={styles.details}>
-      <AppText variant="captionStrong" tone="muted">
-        ORIGINAL
-      </AppText>
-      <Detail label="Created" value={formatDateTime(source.capturedAt)} />
-      <Detail label="Modified" value={formatDateTime(source.modifiedAt)} />
-      <Detail label="Folder" value={formatFolder(source.path)} />
-      <Detail label="Filename" value={video.filename} />
-      <Detail
-        label="Resolution"
-        value={formatResolution(source.width, source.height)}
-      />
-      {coordinates ? <Detail label="Location" value={coordinates} /> : null}
-    </View>
-  );
-}
-
-function Detail({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.detail}>
-      <AppText variant="caption" tone="muted">
-        {label}
-      </AppText>
-      <AppText variant="caption" numberOfLines={1} style={styles.detailValue}>
-        {value}
-      </AppText>
-    </View>
+    <DetailList
+      heading="ORIGINAL"
+      items={[
+        { label: 'Created', value: formatDateTime(source.capturedAt) },
+        { label: 'Modified', value: formatDateTime(source.modifiedAt) },
+        { label: 'Folder', value: formatFolder(source.folder ?? source.path) },
+        { label: 'Filename', value: video.filename },
+        {
+          label: 'Resolution',
+          value: formatResolution(source.width, source.height),
+        },
+        ...(coordinates ? [{ label: 'Location', value: coordinates }] : []),
+      ]}
+    />
   );
 }
 
@@ -187,18 +203,6 @@ function confirmReplace(onConfirm: () => void): void {
 
 const styles = StyleSheet.create({
   content: { padding: spacing.lg, gap: spacing.lg },
-  details: {
-    gap: spacing.xs,
-    padding: spacing.lg,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-  },
-  detail: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
-  detailValue: { flexShrink: 1, textAlign: 'right' },
   comparison: {
     flexDirection: 'row',
     gap: spacing.lg,

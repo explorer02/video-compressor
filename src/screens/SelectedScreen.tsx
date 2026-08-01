@@ -11,7 +11,9 @@ import {
 import type { QualityTierId, SourceVideo } from '../core/compression/types';
 import {
   formatBytes,
+  formatDateTime,
   formatDurationWords,
+  formatFolder,
   formatResolution,
 } from '../core/format';
 import { readSourceVideo } from '../core/metadata';
@@ -19,11 +21,13 @@ import { sizeIndex } from '../core/sizeIndex';
 import { playbackSource, type LibraryVideo } from '../core/videoLibrary';
 import { TierSelector } from '../features/compression/TierSelector';
 import { useDeleteVideo } from '../features/library/useDeleteVideo';
+import { useVideoDetails } from '../features/library/useVideoDetails';
 import { colors, radius, spacing } from '../theme';
 import {
   AppText,
   Banner,
   Button,
+  DetailList,
   Screen,
   useHardwareBack,
   useToast,
@@ -44,6 +48,7 @@ export function SelectedScreen({
 }: SelectedScreenProps) {
   const toast = useToast();
   useHardwareBack(onBack);
+  const details = useVideoDetails(video);
   const sizeBytes = sizeIndex.get(video);
   const facts = useMemo(
     () => sourceFactsFrom(video, sizeBytes),
@@ -121,6 +126,14 @@ export function SelectedScreen({
             value={sizeBytes === null ? '—' : formatBytes(sizeBytes)}
           />
         </View>
+
+        <DetailList
+          items={[
+            { label: 'Created', value: formatDateTime(details.capturedAt) },
+            { label: 'Modified', value: formatDateTime(details.modifiedAt) },
+            { label: 'Folder', value: formatFolder(details.folder) },
+          ]}
+        />
 
         {optimized ? (
           <Banner message="Already optimized — compressing this video would not make it smaller." />
