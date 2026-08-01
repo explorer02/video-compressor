@@ -14,11 +14,24 @@ export type MediaToolsCapabilities = {
   captureDateWriteBack: boolean;
   locationWriteBack: boolean;
   foregroundService: boolean;
+  /** Saving into a chosen folder with the dates set at insert time, rather than written after. */
+  librarySave: boolean;
 };
 
 export type GeoLocation = { latitude: number; longitude: number };
 
+export type SaveVideoOptions = {
+  path: string;
+  filename: string;
+  /** MediaStore `RELATIVE_PATH`, e.g. "DCIM/Camera/". Omitted saves to the platform default. */
+  folder?: string;
+  capturedAtMs?: number;
+  modifiedAtMs?: number;
+};
+
 export type NativeVideoProperties = {
+  /** The folder the asset lives in, in the form the platform saves into. */
+  folder: string | null;
   sizeBytes: number | null;
   frameRate: number | null;
   rotationDegrees: number;
@@ -43,6 +56,8 @@ export type ServiceNotification = {
 
 type MediaToolsNative = {
   getCapabilities: () => MediaToolsCapabilities;
+  /** Resolves with the saved asset's id. */
+  saveVideo: (options: SaveVideoOptions) => Promise<string>;
   readVideoProperties: (
     assetId: string
   ) => Promise<NativeVideoProperties | null>;
@@ -67,6 +82,7 @@ const NO_CAPABILITIES: MediaToolsCapabilities = {
   captureDateWriteBack: false,
   locationWriteBack: false,
   foregroundService: false,
+  librarySave: false,
 };
 
 export const MediaTools = requireNativeModule<MediaToolsNative>('MediaTools');

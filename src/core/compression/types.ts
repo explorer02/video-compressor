@@ -18,6 +18,8 @@ export type SourceVideo = {
   capturedAt: number | null;
   /** Epoch milliseconds the source was last modified. */
   modifiedAt: number | null;
+  /** The folder the source lives in, so a copy can be saved beside it. Null where unknown. */
+  folder: string | null;
   location: { latitude: number; longitude: number } | null;
 };
 

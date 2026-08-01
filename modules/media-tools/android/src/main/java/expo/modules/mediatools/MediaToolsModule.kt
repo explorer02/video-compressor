@@ -24,6 +24,11 @@ import java.io.File
  * capabilities as false until it is written, so callers branch on the result, never on the platform.
  */
 class MediaToolsModule : Module() {
+  private companion object {
+    /** §5's output container; the encoder never produces anything else. */
+    const val MP4_MIME_TYPE = "video/mp4"
+  }
+
   private val context: Context
     get() = appContext.reactContext ?: throw Exceptions.ReactContextLost()
 
@@ -38,8 +43,13 @@ class MediaToolsModule : Module() {
         // MediaStore's LATITUDE/LONGITUDE columns were removed in Android 10 and nothing here can
         // write an ISO-6709 atom into the MP4, so location genuinely cannot be carried over.
         "locationWriteBack" to false,
-        "foregroundService" to true
+        "foregroundService" to true,
+        "librarySave" to true
       )
+    }
+
+    AsyncFunction("saveVideo") { options: SaveVideoInput ->
+      saveVideo(options)
     }
 
     AsyncFunction("readVideoProperties") { assetId: String ->
@@ -77,6 +87,7 @@ class MediaToolsModule : Module() {
       retriever.setDataSource(context, uri)
 
       mapOf(
+        "folder" to queryString(uri, MediaStore.MediaColumns.RELATIVE_PATH),
         "sizeBytes" to querySize(uri),
         // Parentheses required: infix `to` binds tighter than `?:`.
         "frameRate" to (
@@ -164,6 +175,57 @@ class MediaToolsModule : Module() {
         if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getString(0) else null
       }
     }.getOrNull()
+
+  // MARK: - Saving to the library
+
+  /**
+   * §8: saves a finished encode into the gallery, in the source's own folder, carrying its dates.
+   *
+   * Everything is set in the insert rather than updated afterwards. MediaProvider honours the values
+   * a row is created with, but is free to recompute or ignore the same columns on a later `update` —
+   * which is precisely why the previous write-back reported the dates as refused.
+   *
+   * `IS_PENDING` keeps the row invisible to other apps until the bytes are in, so no gallery ever
+   * shows a half-written video.
+   */
+  private fun saveVideo(options: SaveVideoInput): String {
+    val resolver = context.contentResolver
+    val collection = MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+
+    val values = ContentValues().apply {
+      put(MediaStore.MediaColumns.DISPLAY_NAME, options.filename)
+      put(MediaStore.MediaColumns.MIME_TYPE, MP4_MIME_TYPE)
+      options.folder?.let { put(MediaStore.MediaColumns.RELATIVE_PATH, it) }
+      options.capturedAtMs?.let { put(MediaStore.Video.Media.DATE_TAKEN, it.toLong()) }
+      options.modifiedAtMs?.let {
+        // DATE_MODIFIED is seconds, unlike DATE_TAKEN.
+        put(MediaStore.MediaColumns.DATE_MODIFIED, it.toLong() / 1000)
+      }
+      put(MediaStore.MediaColumns.IS_PENDING, 1)
+    }
+
+    val uri = resolver.insert(collection, values)
+      ?: throw SaveFailedException("The media store refused to create the file.")
+
+    try {
+      resolver.openOutputStream(uri)?.use { output ->
+        File(options.path.removePrefix("file://")).inputStream().use { it.copyTo(output) }
+      } ?: throw SaveFailedException("The media store gave no stream to write to.")
+    } catch (error: Exception) {
+      // A pending row with no bytes would linger invisibly forever.
+      runCatching { resolver.delete(uri, null, null) }
+      throw error
+    }
+
+    resolver.update(
+      uri,
+      ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) },
+      null,
+      null
+    )
+
+    return uri.toString()
+  }
 
   // MARK: - Metadata write-back
 
@@ -285,6 +347,21 @@ class MediaToolsModule : Module() {
     )
   }
 }
+
+class SaveVideoInput : Record {
+  @Field val path: String = ""
+
+  @Field val filename: String = "video.mp4"
+
+  /** MediaStore `RELATIVE_PATH`, e.g. "DCIM/Camera/". Null saves to the default location. */
+  @Field val folder: String? = null
+
+  @Field val capturedAtMs: Double? = null
+
+  @Field val modifiedAtMs: Double? = null
+}
+
+class SaveFailedException(message: String) : Exception(message)
 
 class ServiceNotification : Record {
   @Field val title: String = "Compressing video"

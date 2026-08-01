@@ -17,6 +17,9 @@ import ExpoModulesCore
  * - `applyAssetMetadata`   → `PHAssetChangeRequest.creationDate` / `.location` on the saved asset.
  *                            iOS has no separate modified date to set, so `modifiedAt` stays
  *                            skipped there rather than being faked.
+ * - `saveVideo`            → `PHAssetCreationRequest` with `creationDate` and `location` set in the
+ *                            same change block. iOS has no folder to save into — albums are not
+ *                            directories — so `folder` is ignored there by design.
  * - Service functions      → no-ops by design; iOS has no foreground service. Background
  *                            continuation uses the compressor's own background task instead.
  */
@@ -30,8 +33,13 @@ public class MediaToolsModule: Module {
         "assetSizes": false,
         "captureDateWriteBack": false,
         "locationWriteBack": false,
-        "foregroundService": false
+        "foregroundService": false,
+        "librarySave": false
       ]
+    }
+
+    AsyncFunction("saveVideo") { (_: SaveVideoInput) -> String in
+      throw NotImplementedException()
     }
 
     AsyncFunction("readVideoProperties") { (_: String) -> [String: Any]? in
@@ -62,6 +70,28 @@ public class MediaToolsModule: Module {
 
   private static let notImplemented =
     "Metadata write-back is not implemented on iOS yet."
+}
+
+/**
+ * Never reached in practice: `librarySave` is false, so callers take the expo-media-library path.
+ * It exists so the function is present with the right signature rather than missing.
+ */
+internal final class NotImplementedException: Exception {
+  override var reason: String {
+    "Saving through media-tools is not implemented on iOS yet."
+  }
+}
+
+struct SaveVideoInput: Record {
+  @Field var path: String = ""
+
+  @Field var filename: String = "video.mp4"
+
+  @Field var folder: String?
+
+  @Field var capturedAtMs: Double?
+
+  @Field var modifiedAtMs: Double?
 }
 
 struct ServiceNotification: Record {

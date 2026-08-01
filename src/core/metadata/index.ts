@@ -60,6 +60,7 @@ export async function readSourceVideo(
     rotationDegrees: native?.rotationDegrees ?? 0,
     capturedAt: native?.capturedAtMs ?? video.createdAt,
     modifiedAt: video.modifiedAt,
+    folder: native?.folder ?? null,
     location: native?.location ?? null,
   };
 }

@@ -8,6 +8,7 @@ import {
 import {
   assetExists,
   deleteAssets,
+  saveCarriesMetadata,
   saveToLibrary,
 } from '../../core/videoLibrary';
 import { workspace } from '../../core/workspace';
@@ -49,11 +50,7 @@ export function useSaveOutcome({
 
       void (async () => {
         try {
-          const savedAssetId = await saveToLibrary(outcome.outputPath);
-          const report =
-            mode === 'original'
-              ? await applySavedAssetMetadata(savedAssetId, outcome.source)
-              : null;
+          const report = await saveWithMetadata(outcome, mode);
 
           // The gallery has its own copy now; ours is just a temp file.
           workspace.discard(outcome.outputPath);
@@ -66,7 +63,7 @@ export function useSaveOutcome({
         }
       })();
     },
-    [busy, onFailed, onSaved, outcome.outputPath, outcome.source]
+    [busy, onFailed, onSaved, outcome]
   );
 
   /**
@@ -82,8 +79,7 @@ export function useSaveOutcome({
 
     void (async () => {
       try {
-        const savedAssetId = await saveToLibrary(outcome.outputPath);
-        await applySavedAssetMetadata(savedAssetId, outcome.source);
+        await saveWithMetadata(outcome, 'original');
         workspace.discard(outcome.outputPath);
 
         await deleteAssets([outcome.source.assetId]);
@@ -101,7 +97,7 @@ export function useSaveOutcome({
         setBusy(false);
       }
     })();
-  }, [busy, onFailed, onSaved, outcome.outputPath, outcome.source]);
+  }, [busy, onFailed, onSaved, outcome]);
 
   const discard = useCallback(() => {
     workspace.discard(outcome.outputPath);
@@ -109,6 +105,43 @@ export function useSaveOutcome({
   }, [onDiscarded, outcome.outputPath]);
 
   return { busy, saveCopy, replaceOriginal, discard };
+}
+
+/**
+ * Saves the encode, carrying the source's folder and dates when asked for.
+ *
+ * Where the platform sets metadata as the asset is created, that is the whole job and nothing can
+ * be partially applied. Where it does not, the asset is created first and the dates written
+ * afterwards — the path that can fail per field, which is what the report describes.
+ */
+async function saveWithMetadata(
+  outcome: CompressionOutcome,
+  mode: SaveMode
+): Promise<AppliedMetadataReport | null> {
+  const { source, outputPath } = outcome;
+  const keepOriginal = mode === 'original';
+
+  const savedAssetId = await saveToLibrary(outputPath, {
+    filename: filenameOf(outputPath),
+    // Even a fresh-metadata copy belongs beside the original rather than in the camera folder.
+    ...(source.folder ? { folder: source.folder } : {}),
+    ...(keepOriginal && source.capturedAt !== null
+      ? { capturedAtMs: source.capturedAt }
+      : {}),
+    ...(keepOriginal && source.modifiedAt !== null
+      ? { modifiedAtMs: source.modifiedAt }
+      : {}),
+  });
+
+  if (!keepOriginal) return null;
+  if (saveCarriesMetadata) {
+    return { applied: ['capturedAt', 'modifiedAt'], skipped: [] };
+  }
+  return applySavedAssetMetadata(savedAssetId, source);
+}
+
+function filenameOf(path: string): string {
+  return decodeURI(path).split('/').pop() || 'video.mp4';
 }
 
 /**

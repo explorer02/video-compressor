@@ -8,6 +8,10 @@ import {
   type EventSubscription,
 } from 'expo-media-library';
 
+import {
+  MediaTools,
+  mediaToolsCapabilities,
+} from '../../../modules/media-tools';
 import type {
   LibraryVideo,
   SortDirection,
@@ -112,10 +116,46 @@ export async function assetExists(id: VideoAssetId): Promise<boolean> {
   }
 }
 
-export async function saveToLibrary(filePath: string): Promise<VideoAssetId> {
+export type SaveTarget = {
+  filename: string;
+  /** The folder to save into, when the platform can choose one. */
+  folder?: string;
+  capturedAtMs?: number;
+  modifiedAtMs?: number;
+};
+
+/**
+ * Saves a finished encode into the gallery.
+ *
+ * Where the platform can do it, everything — folder and both dates — is set as the asset is
+ * created, because a media store honours the values a row is born with but is free to ignore the
+ * same columns on a later update. That is the difference between the dates sticking and not.
+ * Elsewhere this falls back to a plain create, and the caller writes metadata afterwards.
+ */
+export async function saveToLibrary(
+  filePath: string,
+  target?: SaveTarget
+): Promise<VideoAssetId> {
+  if (mediaToolsCapabilities.librarySave && target) {
+    return MediaTools.saveVideo({
+      path: filePath,
+      filename: target.filename,
+      ...(target.folder ? { folder: target.folder } : {}),
+      ...(target.capturedAtMs !== undefined
+        ? { capturedAtMs: target.capturedAtMs }
+        : {}),
+      ...(target.modifiedAtMs !== undefined
+        ? { modifiedAtMs: target.modifiedAtMs }
+        : {}),
+    });
+  }
+
   const asset = await Asset.create(filePath);
   return asset.id;
 }
+
+/** True when `saveToLibrary` also stores the dates, so no write-back pass is needed. */
+export const saveCarriesMetadata = mediaToolsCapabilities.librarySave;
 
 /**
  * Deletes assets, showing the OS confirmation dialog the platform requires.
