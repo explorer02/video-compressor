@@ -20,7 +20,14 @@ import type { LibraryVideo } from '../core/videoLibrary';
 import { TierSelector } from '../features/compression/TierSelector';
 import { VideoThumbnail } from '../features/library/VideoThumbnail';
 import { colors, radius, spacing } from '../theme';
-import { AppText, Banner, Button, Screen, useToast } from '../ui';
+import {
+  AppText,
+  Banner,
+  Button,
+  Screen,
+  useHardwareBack,
+  useToast,
+} from '../ui';
 
 export type SelectedScreenProps = {
   video: LibraryVideo;
@@ -35,6 +42,7 @@ export function SelectedScreen({
   onStart,
 }: SelectedScreenProps) {
   const toast = useToast();
+  useHardwareBack(onBack);
   const sizeBytes = sizeIndex.get(video);
   const facts = useMemo(
     () => sourceFactsFrom(video, sizeBytes),

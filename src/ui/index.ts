@@ -9,3 +9,4 @@ export {
   type SegmentedControlProps,
 } from './SegmentedControl';
 export { ToastProvider, useToast } from './Toast';
+export { useHardwareBack } from './useHardwareBack';

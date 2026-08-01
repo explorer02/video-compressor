@@ -12,7 +12,7 @@ import { ProgressBar } from '../features/compression/ProgressBar';
 import { useCompressionJob } from '../features/compression/useCompressionJob';
 import { VideoThumbnail } from '../features/library/VideoThumbnail';
 import { spacing } from '../theme';
-import { AppText, Button, Screen } from '../ui';
+import { AppText, Button, Screen, useHardwareBack } from '../ui';
 
 export type CompressingScreenProps = {
   video: LibraryVideo;
@@ -37,6 +37,9 @@ export function CompressingScreen({
     onCompleted,
     onCancelled,
   });
+
+  // Hardware back means the same thing as the on-screen button: cancel, never abandon (§3.3).
+  useHardwareBack(job.phase === 'running' ? cancel : onCancelled);
 
   return (
     <Screen>

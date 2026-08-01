@@ -99,6 +99,8 @@ export function useCompressionJob({
       progress = clampProgress(fraction);
     });
     cancelRun.current = run.cancel;
+    // True once the run reached an outcome (completed, failed, or user-cancelled).
+    let settled = false;
 
     void (async () => {
       try {
@@ -114,12 +116,14 @@ export function useCompressionJob({
         );
         if (!active) return;
 
+        settled = true;
         workspace.markJobFinished();
         logEstimateAccuracy(tier, source, outcome.outputSizeBytes);
         onCompleted(outcome);
       } catch (error) {
         if (!active) return;
 
+        settled = true;
         workspace.markJobFinished();
         if (cancelled.current) onCancelled();
         else setJob({ phase: 'failed', message: describe(error) });
@@ -133,6 +137,13 @@ export function useCompressionJob({
       active = false;
       clearInterval(ticker);
       background.end();
+      // Unmounting mid-run (back navigation, a permission flip re-rendering the router) must not
+      // leave the native encoder running headless — cancel it and close the job journal so the
+      // next launch does not report a compression that was deliberately walked away from.
+      if (!settled) {
+        run.cancel();
+        workspace.markJobFinished();
+      }
     };
   }, [onCancelled, onCompleted, source, tierId, video]);
 

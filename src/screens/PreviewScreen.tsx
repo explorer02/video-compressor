@@ -6,7 +6,7 @@ import { formatBytes, formatSavingPercent } from '../core/format';
 import { canKeepOriginalMetadata } from '../core/metadata';
 import { useSaveOutcome } from '../features/outcome/useSaveOutcome';
 import { colors, radius, spacing } from '../theme';
-import { AppText, Button, Screen, useToast } from '../ui';
+import { AppText, Button, Screen, useHardwareBack, useToast } from '../ui';
 
 export type PreviewScreenProps = {
   outcome: CompressionOutcome;
@@ -31,6 +31,9 @@ export function PreviewScreen({ outcome, onFinished }: PreviewScreenProps) {
     onDiscarded: onFinished,
     onFailed: message => toast.show(message, 'danger'),
   });
+
+  // Back returns to the library; while a save is in flight there is nothing safe to back out to.
+  useHardwareBack(save.busy ? null : onFinished);
 
   const saved = formatSavingPercent(
     outcome.source.sizeBytes,
