@@ -70,8 +70,23 @@ export async function listAllVideoIds(): Promise<VideoAssetId[]> {
   return metadata.map(entry => entry.id);
 }
 
-export async function listAllVideos(): Promise<LibraryVideo[]> {
-  const metadata = await videoQuery().exeForMetadata();
+/**
+ * Every video, in one read. Feeds the paths that cannot be paged by the media store — sorting or
+ * filtering by size — so the ordering is applied here rather than left undefined.
+ */
+export async function listAllVideos(
+  order?: Pick<ListVideosOptions, 'key' | 'direction'>
+): Promise<LibraryVideo[]> {
+  const query = videoQuery();
+  const metadata = await (
+    order
+      ? query.orderBy({
+          key: SORT_FIELDS[order.key],
+          ascending: order.direction === 'asc',
+        })
+      : query
+  ).exeForMetadata();
+
   return metadata.map(toLibraryVideo);
 }
 

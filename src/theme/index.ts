@@ -10,6 +10,8 @@ export const colors = {
   /** Backdrop for media (thumbnails, player) — dark so video content reads correctly. */
   media: '#101114',
   border: '#DDE0E4',
+  /** Dims the screen behind a sheet or dialog. */
+  scrim: 'rgba(16, 17, 20, 0.4)',
 
   text: '#101114',
   textMuted: '#5F6570',

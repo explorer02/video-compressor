@@ -20,7 +20,7 @@ import { readSourceVideo } from '../core/metadata';
 import { sizeIndex } from '../core/sizeIndex';
 import { playbackSource, type LibraryVideo } from '../core/videoLibrary';
 import { TierSelector } from '../features/compression/TierSelector';
-import { useDeleteVideo } from '../features/library/useDeleteVideo';
+import { useDeleteVideos } from '../features/library/useDeleteVideos';
 import { useVideoDetails } from '../features/library/useVideoDetails';
 import { colors, radius, spacing } from '../theme';
 import {
@@ -61,7 +61,7 @@ export function SelectedScreen({
   const [resolving, setResolving] = useState(false);
   const optimized = isAlreadyOptimized(facts);
 
-  const deletion = useDeleteVideo({
+  const deletion = useDeleteVideos({
     onDeleted: message => {
       toast.show(message, 'success');
       onBack();
@@ -100,7 +100,7 @@ export function SelectedScreen({
           busy={deletion.busy}
           disabled={resolving}
           onPress={() =>
-            confirmDelete(video.filename, () => deletion.remove(video))
+            confirmDelete(video.filename, () => deletion.remove([video]))
           }
         />
       </View>

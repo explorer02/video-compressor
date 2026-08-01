@@ -17,10 +17,18 @@ export {
 
 export { useMediaAccess, type MediaAccessState } from './permissions';
 
-export { nextSort, readStoredSort, storeSort } from './sortPreference';
+export {
+  nextSort,
+  readStoredSizeFilter,
+  readStoredSort,
+  storeSizeFilter,
+  storeSort,
+} from './sortPreference';
 
 export {
   DEFAULT_SORT,
+  SIZE_FILTERS,
+  type SizeFilter,
   type LibraryVideo,
   type MediaAccess,
   type SortDirection,

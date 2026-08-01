@@ -7,11 +7,14 @@ import {
   listAllVideos,
   listVideos,
   nextSort,
+  readStoredSizeFilter,
   readStoredSort,
+  storeSizeFilter,
   storeSort,
   subscribeToLibraryChanges,
   type LibraryVideo,
   type MediaStoreSortKey,
+  type SizeFilter,
   type VideoSort,
   type VideoSortKey,
 } from '../../core/videoLibrary';
@@ -31,19 +34,24 @@ export type VideoBrowser = {
   status: BrowserStatus;
   refreshing: boolean;
   hasMore: boolean;
-  /** Null until the background count pass finishes. */
+  /** Videos matching the current filter. Null until the count pass finishes. */
   totalCount: number | null;
+  /** Videos in the library regardless of filter, so a filtered list reads as filtered. */
+  libraryCount: number | null;
   sort: VideoSort;
-  /** False until the size index lands; the toolbar disables that option. */
+  sizeFilter: SizeFilter;
+  /** False until the size index lands; the toolbar disables both size options. */
   sizeSortAvailable: boolean;
   toggleSort: (key: VideoSortKey) => void;
+  setSizeFilter: (filter: SizeFilter) => void;
   loadMore: () => void;
   refresh: () => void;
 };
 
-/** What the library returned, and for which sort — the sort it was loaded for is part of the value. */
+/** What the library returned, and for which view — the query it answers is part of the value. */
 type LoadedPages = {
   sort: VideoSort;
+  sizeFilter: SizeFilter;
   videos: LibraryVideo[];
   hasMore: boolean;
 };
@@ -52,21 +60,26 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
   const [sort, setSort] = useState<VideoSort>(() =>
     resolveSort(readStoredSort())
   );
+  const [sizeFilter, setStoredSizeFilter] = useState<SizeFilter>(() =>
+    sizeIndex.available ? readStoredSizeFilter() : null
+  );
   const [loaded, setLoaded] = useState<LoadedPages | null>(null);
   const [failed, setFailed] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [totalCount, setTotalCount] = useState<number | null>(null);
+  const [libraryCount, setLibraryCount] = useState<number | null>(null);
   // Incremented by pull-to-refresh and by media-library change events to re-run the load effect.
   const [reloadToken, setReloadToken] = useState(0);
 
   // Bumped on every load so a slow in-flight page cannot overwrite a newer one.
   const generation = useRef(0);
   const loadingMore = useRef(false);
-  // Sorting by size needs the whole library ranked before any of it can be shown.
-  const sizeSorted = useRef<LibraryVideo[]>(NO_VIDEOS);
+  // Sorting or filtering by size needs the whole library resolved before any of it can be shown.
+  const scanned = useRef<LibraryVideo[]>(NO_VIDEOS);
 
-  // Loading is derived, not stored: a result belonging to a different sort *is* the loading state.
-  const current = loaded && sameSort(loaded.sort, sort) ? loaded : null;
+  // Loading is derived, not stored: a result belonging to a different query *is* the loading state.
+  const current =
+    loaded && matchesView(loaded, sort, sizeFilter) ? loaded : null;
   const status: BrowserStatus = failed
     ? 'error'
     : current
@@ -82,16 +95,17 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
 
     void (async () => {
       try {
-        if (sortsBySize(sort)) {
-          const ranked = await rankBySize(sort.direction);
+        if (needsFullScan(sort, sizeFilter)) {
+          const matching = await scanLibrary(sort, sizeFilter);
           if (!active) return;
 
-          sizeSorted.current = ranked;
-          setTotalCount(ranked.length);
+          scanned.current = matching;
+          setTotalCount(matching.length);
           setLoaded({
             sort,
-            videos: ranked.slice(0, PAGE_SIZE),
-            hasMore: ranked.length > PAGE_SIZE,
+            sizeFilter,
+            videos: matching.slice(0, PAGE_SIZE),
+            hasMore: matching.length > PAGE_SIZE,
           });
           setFailed(false);
           return;
@@ -104,7 +118,12 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
         });
         if (!active) return;
 
-        setLoaded({ sort, videos: page.videos, hasMore: page.hasMore });
+        setLoaded({
+          sort,
+          sizeFilter,
+          videos: page.videos,
+          hasMore: page.hasMore,
+        });
         setFailed(false);
       } catch (error) {
         if (!active) return;
@@ -118,7 +137,9 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
       // The header count needs the whole library; it must never delay the first page.
       try {
         const ids = await listAllVideoIds();
-        if (active && request === generation.current) setTotalCount(ids.length);
+        if (!active || request !== generation.current) return;
+        setLibraryCount(ids.length);
+        if (sizeFilter === null) setTotalCount(ids.length);
       } catch (error) {
         console.warn('[library] failed to count videos', error);
       }
@@ -127,7 +148,7 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
     return () => {
       active = false;
     };
-  }, [enabled, reloadToken, sort]);
+  }, [enabled, reloadToken, sizeFilter, sort]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -150,11 +171,15 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
   const loadMore = useCallback(() => {
     if (!enabled || loadingMore.current || !current?.hasMore) return;
 
-    // A size sort is already ranked in memory; paging it is a slice, not another query.
-    if (sortsBySize(sort)) {
-      const ranked = sizeSorted.current;
-      const next = ranked.slice(0, current.videos.length + PAGE_SIZE);
-      setLoaded({ sort, videos: next, hasMore: ranked.length > next.length });
+    // A scanned view is already resolved in memory; paging it is a slice, not another query.
+    if (needsFullScan(sort, sizeFilter)) {
+      const next = scanned.current.slice(0, current.videos.length + PAGE_SIZE);
+      setLoaded({
+        sort,
+        sizeFilter,
+        videos: next,
+        hasMore: scanned.current.length > next.length,
+      });
       return;
     }
 
@@ -171,7 +196,7 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
         if (request !== generation.current) return;
 
         setLoaded(previous =>
-          previous && sameSort(previous.sort, sort)
+          previous && matchesView(previous, sort, sizeFilter)
             ? {
                 ...previous,
                 // Offset paging can repeat a row if the library changed mid-scroll.
@@ -186,7 +211,7 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
         loadingMore.current = false;
       }
     })();
-  }, [current, enabled, sort]);
+  }, [current, enabled, sizeFilter, sort]);
 
   const toggleSort = useCallback((key: VideoSortKey) => {
     setSort(previous => {
@@ -194,6 +219,11 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
       storeSort(updated);
       return updated;
     });
+  }, []);
+
+  const setSizeFilter = useCallback((filter: SizeFilter) => {
+    storeSizeFilter(filter);
+    setStoredSizeFilter(filter);
   }, []);
 
   const refresh = useCallback(() => {
@@ -207,9 +237,12 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
     refreshing,
     hasMore: current?.hasMore ?? true,
     totalCount,
+    libraryCount,
     sort,
+    sizeFilter,
     sizeSortAvailable: sizeIndex.available,
     toggleSort,
+    setSizeFilter,
     loadMore,
     refresh,
   };
@@ -226,22 +259,38 @@ function resolveSort(stored: VideoSort): VideoSort {
   return stored.key === 'size' && !sizeIndex.available ? DEFAULT_SORT : stored;
 }
 
-function sortsBySize(sort: VideoSort): boolean {
-  return sort.key === 'size' && sizeIndex.available;
+/**
+ * Both sorting and filtering by size need every size known, which the media store cannot answer —
+ * so they share one path: read the whole library, index it, then rank and page in memory.
+ */
+function needsFullScan(sort: VideoSort, sizeFilter: SizeFilter): boolean {
+  if (!sizeIndex.available) return false;
+  return sort.key === 'size' || sizeFilter !== null;
 }
 
-/**
- * §4: the media store cannot order by size, so the whole library is indexed and ranked here.
- * Assets whose size could not be read sort last rather than pretending to be zero bytes.
- */
-async function rankBySize(
-  direction: VideoSort['direction']
+async function scanLibrary(
+  sort: VideoSort,
+  sizeFilter: SizeFilter
 ): Promise<LibraryVideo[]> {
-  const all = await listAllVideos();
+  const all = await listAllVideos(mediaStoreSort(sort));
   await sizeIndex.ensure(all);
 
+  const matching =
+    sizeFilter === null
+      ? all
+      : all.filter(video => (sizeIndex.get(video) ?? 0) >= sizeFilter);
+
+  return sort.key === 'size' ? rankBySize(matching, sort.direction) : matching;
+}
+
+/** Assets whose size could not be read sort last rather than pretending to be zero bytes. */
+function rankBySize(
+  videos: LibraryVideo[],
+  direction: VideoSort['direction']
+): LibraryVideo[] {
   const sign = direction === 'asc' ? 1 : -1;
-  return [...all].sort((a, b) => {
+
+  return [...videos].sort((a, b) => {
     const sizeA = sizeIndex.get(a);
     const sizeB = sizeIndex.get(b);
     if (sizeA === null) return sizeB === null ? 0 : 1;
@@ -260,8 +309,16 @@ function mediaStoreSort(sort: VideoSort): {
   };
 }
 
-function sameSort(a: VideoSort, b: VideoSort): boolean {
-  return a.key === b.key && a.direction === b.direction;
+function matchesView(
+  loaded: LoadedPages,
+  sort: VideoSort,
+  sizeFilter: SizeFilter
+): boolean {
+  return (
+    loaded.sort.key === sort.key &&
+    loaded.sort.direction === sort.direction &&
+    loaded.sizeFilter === sizeFilter
+  );
 }
 
 function appendNew(
