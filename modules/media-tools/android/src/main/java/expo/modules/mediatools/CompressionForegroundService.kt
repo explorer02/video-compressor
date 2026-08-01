@@ -37,8 +37,9 @@ class CompressionForegroundService : Service() {
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     when (intent?.action) {
-      ACTION_START -> startForegroundWith(buildNotification(intent))
-      ACTION_UPDATE -> notificationManager().notify(NOTIFICATION_ID, buildNotification(intent))
+      // Updates re-run startForeground rather than notify(): every startForegroundService()
+      // delivery obliges a startForeground() call, and repeating it also updates the notification.
+      ACTION_START, ACTION_UPDATE -> startForegroundWith(buildNotification(intent))
       ACTION_STOP -> {
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -49,13 +50,14 @@ class CompressionForegroundService : Service() {
   }
 
   private fun startForegroundWith(notification: Notification) {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
       startForeground(
         NOTIFICATION_ID,
         notification,
         ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROCESSING
       )
     } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+      // mediaProcessing does not exist before API 35; older platforms reject unknown type bits.
       startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
     } else {
       startForeground(NOTIFICATION_ID, notification)

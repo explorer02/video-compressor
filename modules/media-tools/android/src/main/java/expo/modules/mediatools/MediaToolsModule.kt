@@ -81,9 +81,11 @@ class MediaToolsModule : Module() {
 
       mapOf(
         "sizeBytes" to querySize(uri),
-        "frameRate" to retriever.extract(MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE)
-          ?.toFloatOrNull()
-          ?: deriveFrameRate(retriever),
+        // Parentheses required: infix `to` binds tighter than `?:`.
+        "frameRate" to (
+          retriever.extract(MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE)?.toFloatOrNull()
+            ?: deriveFrameRate(retriever)
+          ),
         "rotationDegrees" to
           (retriever.extract(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0),
         "bitrate" to retriever.extract(MediaMetadataRetriever.METADATA_KEY_BITRATE)?.toIntOrNull(),

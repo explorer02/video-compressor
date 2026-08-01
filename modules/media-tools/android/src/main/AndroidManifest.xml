@@ -1,8 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <application>
     <!--
-      mediaProcessing is the correct type for a user-initiated encode on API 34+; dataSync is the
-      fallback for older platforms, which ignore the flag they do not recognise.
+      mediaProcessing is the correct type for a user-initiated encode on API 35+; dataSync is what
+      API 29-34 use. Both bits are declared so startForeground can pass either.
     -->
     <service
       android:name=".CompressionForegroundService"
