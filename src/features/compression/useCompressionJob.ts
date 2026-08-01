@@ -126,6 +126,7 @@ export function useCompressionJob({
         settled = true;
         workspace.markJobFinished();
         logEstimateAccuracy(tier, source, outcome.outputSizeBytes);
+        logEncodeSpeed(tier, source, outcome.elapsedMs);
         onCompleted(outcome);
       } catch (error) {
         if (!active) return;
@@ -171,6 +172,15 @@ async function adoptOutput(
   producedPath: string,
   startedAt: number
 ): Promise<CompressionOutcome> {
+  // The encoder can hand back the input untouched when it decides there is nothing to do. Adopting
+  // that would move the user's original into our temp directory and then delete it as "not
+  // smaller" — so the source path is the one thing we must never take ownership of.
+  if (isSamePath(producedPath, source.path)) {
+    throw new Error(
+      'This video is already optimized — compressing it would not make it smaller.'
+    );
+  }
+
   const adopted = workspace.adopt(producedPath, outputFilename(video, tierId));
   const outputSizeBytes = new File(adopted.uri).size;
 
@@ -191,6 +201,12 @@ async function adoptOutput(
   };
 }
 
+/** Same file, allowing for the `file://` prefix appearing on one side and not the other. */
+function isSamePath(a: string, b: string): boolean {
+  const bare = (path: string) => decodeURI(path).replace(/^file:\/\//, '');
+  return bare(a) === bare(b);
+}
+
 function outputFilename(video: LibraryVideo, tierId: QualityTierId): string {
   const stem = video.filename.replace(/\.[^.]+$/, '') || 'video';
   return `${stem}-${tierId}.mp4`;
@@ -209,6 +225,25 @@ function logEstimateAccuracy(
   console.log(
     `[estimate] tier=${tier.id} fps=${source.frameRate} estimated=${estimated}B ` +
       `actual=${actualBytes}B drift=${driftPercent > 0 ? '+' : ''}${driftPercent}%`
+  );
+}
+
+/**
+ * §7 asks for ≥ 2× real-time. Encoding cost is set by pixels × frames, so logging the ratio
+ * alongside both makes a slow run diagnosable instead of anecdotal.
+ */
+function logEncodeSpeed(
+  tier: QualityTier,
+  source: SourceVideo,
+  elapsedMs: number
+): void {
+  if (elapsedMs <= 0 || source.durationMs <= 0) return;
+
+  const realtimeRatio = source.durationMs / elapsedMs;
+  console.log(
+    `[speed] tier=${tier.id} ${source.width}x${source.height}@${Math.round(source.frameRate)}fps ` +
+      `duration=${Math.round(source.durationMs / 1000)}s elapsed=${Math.round(elapsedMs / 1000)}s ` +
+      `ratio=${realtimeRatio.toFixed(2)}x realtime (target >= 2x)`
   );
 }
 

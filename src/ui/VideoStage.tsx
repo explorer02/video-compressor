@@ -12,10 +12,11 @@ export type VideoStageProps = {
 };
 
 /**
- * A video surface with the platform's own transport controls — play, pause, scrub.
+ * A video surface with the platform's own transport controls — play, pause, scrub, fullscreen.
  *
  * Using `nativeControls` rather than our own buttons means the controls behave exactly as they do
- * elsewhere on the device, including the accessibility affordances that come with them.
+ * elsewhere on the device, including the accessibility affordances that come with them. Fullscreen
+ * is left at the API's default (enabled) rather than opted out of.
  */
 export function VideoStage({
   source,
@@ -34,7 +35,6 @@ export function VideoStage({
       style={[styles.stage, style]}
       contentFit="contain"
       nativeControls
-      fullscreenOptions={{ enable: false }}
     />
   );
 }

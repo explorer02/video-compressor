@@ -35,14 +35,22 @@ const FULL_HD: QualityTier = {
   method: 'manual',
 };
 
+/**
+ * `manual`, not `auto`, despite §5's implementation column.
+ *
+ * In `auto` the library ignores the bitrate we pass and applies its own envelope, which ceilings a
+ * 1280px target at 2.0 Mbps and aims for ~1.5 Mbps — sized for chat playback, and visibly softer
+ * than this tier promises. `manual` is the documented way to control the bitrate, and it is what
+ * makes the 2.5 Mbps in §5's table actually take effect.
+ */
 const HD: QualityTier = {
   id: 'hd',
   label: 'HD · 720p',
-  tagline: 'WhatsApp HD',
+  tagline: 'Great for sharing',
   longEdge: 1280,
   videoKbps: 2500,
   audioKbps: 128,
-  method: 'auto',
+  method: 'manual',
 };
 
 export const QUALITY_TIERS: QualityTier[] = [FULL_HD, HD];
@@ -132,6 +140,16 @@ export function evaluateTier(
 ): TierEligibility {
   const estimatedBytes = estimateOutputBytes(tier, facts);
   const sourceLongEdge = longEdgeOf(facts);
+
+  // A tier below the source's resolution would be advertising a size it cannot produce — output is
+  // clamped to the source, so "Full HD · 1080p" on a 720p video is a label, not a result. Strictly
+  // less than, so a source sitting exactly at a tier's resolution can still be compressed to it.
+  if (sourceLongEdge !== null && sourceLongEdge < tier.longEdge) {
+    return {
+      eligible: false,
+      reason: `Source is only ${sourceLongEdge}px`,
+    };
+  }
 
   if (sourceLongEdge !== null && sourceLongEdge <= tier.longEdge) {
     const sourceKbps = totalSourceKbps(facts);
