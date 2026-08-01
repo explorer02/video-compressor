@@ -1,12 +1,25 @@
-import { useVideoPlayer, VideoView } from 'expo-video';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 
 import type { CompressionOutcome } from '../core/compression/types';
-import { formatBytes, formatSavingPercent } from '../core/format';
+import {
+  formatBytes,
+  formatCoordinates,
+  formatDateTime,
+  formatFolder,
+  formatResolution,
+  formatSavingPercent,
+} from '../core/format';
 import { canKeepOriginalMetadata } from '../core/metadata';
 import { useSaveOutcome } from '../features/outcome/useSaveOutcome';
 import { colors, radius, spacing } from '../theme';
-import { AppText, Button, Screen, useHardwareBack, useToast } from '../ui';
+import {
+  AppText,
+  Button,
+  Screen,
+  useHardwareBack,
+  useToast,
+  VideoStage,
+} from '../ui';
 
 export type PreviewScreenProps = {
   outcome: CompressionOutcome;
@@ -16,11 +29,6 @@ export type PreviewScreenProps = {
 /** §3.4 — watch the result, see what it saved, then decide what happens to it. */
 export function PreviewScreen({ outcome, onFinished }: PreviewScreenProps) {
   const toast = useToast();
-
-  const player = useVideoPlayer(outcome.outputPath, instance => {
-    instance.loop = true;
-    instance.play();
-  });
 
   const save = useSaveOutcome({
     outcome,
@@ -43,13 +51,7 @@ export function PreviewScreen({ outcome, onFinished }: PreviewScreenProps) {
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.content}>
-        <VideoView
-          player={player}
-          style={styles.player}
-          contentFit="contain"
-          nativeControls
-          fullscreenOptions={{ enable: false }}
-        />
+        <VideoStage source={outcome.outputPath} autoPlay loop />
 
         <View style={styles.comparison}>
           <Measure
@@ -68,6 +70,8 @@ export function PreviewScreen({ outcome, onFinished }: PreviewScreenProps) {
             {`${saved} smaller`}
           </AppText>
         ) : null}
+
+        <SourceDetails outcome={outcome} />
       </ScrollView>
 
       <View style={styles.actions}>
@@ -103,6 +107,45 @@ export function PreviewScreen({ outcome, onFinished }: PreviewScreenProps) {
         />
       </View>
     </Screen>
+  );
+}
+
+/**
+ * What the original was, next to the size comparison — the facts a "keep original metadata" save
+ * is promising to carry forward, so the user can see them before choosing.
+ */
+function SourceDetails({ outcome }: { outcome: CompressionOutcome }) {
+  const { source, video } = outcome;
+  const coordinates = formatCoordinates(source.location);
+
+  return (
+    <View style={styles.details}>
+      <AppText variant="captionStrong" tone="muted">
+        ORIGINAL
+      </AppText>
+      <Detail label="Created" value={formatDateTime(source.capturedAt)} />
+      <Detail label="Modified" value={formatDateTime(source.modifiedAt)} />
+      <Detail label="Folder" value={formatFolder(source.path)} />
+      <Detail label="Filename" value={video.filename} />
+      <Detail
+        label="Resolution"
+        value={formatResolution(source.width, source.height)}
+      />
+      {coordinates ? <Detail label="Location" value={coordinates} /> : null}
+    </View>
+  );
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.detail}>
+      <AppText variant="caption" tone="muted">
+        {label}
+      </AppText>
+      <AppText variant="caption" numberOfLines={1} style={styles.detailValue}>
+        {value}
+      </AppText>
+    </View>
   );
 }
 
@@ -144,12 +187,18 @@ function confirmReplace(onConfirm: () => void): void {
 
 const styles = StyleSheet.create({
   content: { padding: spacing.lg, gap: spacing.lg },
-  player: {
-    width: '100%',
-    aspectRatio: 16 / 9,
-    borderRadius: radius.sm,
-    backgroundColor: colors.media,
+  details: {
+    gap: spacing.xs,
+    padding: spacing.lg,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
   },
+  detail: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  detailValue: { flexShrink: 1, textAlign: 'right' },
   comparison: {
     flexDirection: 'row',
     gap: spacing.lg,

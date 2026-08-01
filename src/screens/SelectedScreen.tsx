@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 
 import {
   DEFAULT_TIER_ID,
@@ -16,9 +16,9 @@ import {
 } from '../core/format';
 import { readSourceVideo } from '../core/metadata';
 import { sizeIndex } from '../core/sizeIndex';
-import type { LibraryVideo } from '../core/videoLibrary';
+import { playbackSource, type LibraryVideo } from '../core/videoLibrary';
 import { TierSelector } from '../features/compression/TierSelector';
-import { VideoThumbnail } from '../features/library/VideoThumbnail';
+import { useDeleteVideo } from '../features/library/useDeleteVideo';
 import { colors, radius, spacing } from '../theme';
 import {
   AppText,
@@ -27,6 +27,7 @@ import {
   Screen,
   useHardwareBack,
   useToast,
+  VideoStage,
 } from '../ui';
 
 export type SelectedScreenProps = {
@@ -55,6 +56,15 @@ export function SelectedScreen({
   const [resolving, setResolving] = useState(false);
   const optimized = isAlreadyOptimized(facts);
 
+  const deletion = useDeleteVideo({
+    onDeleted: message => {
+      toast.show(message, 'success');
+      onBack();
+    },
+    onKept: message => toast.show(message),
+    onFailed: message => toast.show(message, 'danger'),
+  });
+
   // Resolving a real path is the expensive call, so it happens once, here, on the way to encoding.
   const start = () => {
     if (!tier || resolving) return;
@@ -77,10 +87,21 @@ export function SelectedScreen({
     <Screen>
       <View style={styles.bar}>
         <Button label="Back" variant="ghost" onPress={onBack} />
+        {/* Lives in the bar, not the action row, so a redundant video can be deleted even when
+            it is already optimized and there is nothing to compress. */}
+        <Button
+          label="Delete"
+          variant="danger"
+          busy={deletion.busy}
+          disabled={resolving}
+          onPress={() =>
+            confirmDelete(video.filename, () => deletion.remove(video))
+          }
+        />
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <VideoThumbnail assetId={video.id} style={styles.hero} />
+        <VideoStage source={playbackSource(video.id)} />
 
         <AppText variant="heading" numberOfLines={2}>
           {video.filename}
@@ -138,6 +159,21 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
+/**
+ * Our own warning first. The OS shows its own delete confirmation afterwards, which cannot be
+ * bypassed, but by then the user has already agreed to the intent.
+ */
+function confirmDelete(filename: string, onConfirm: () => void): void {
+  Alert.alert(
+    'Delete this video?',
+    `${filename} will be removed from your device. This can’t be undone.`,
+    [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: onConfirm },
+    ]
+  );
+}
+
 /** HD is the default (§3.2), unless the source has outgrown it. */
 function defaultEligibleTier(
   facts: Parameters<typeof isAlreadyOptimized>[0]
@@ -149,9 +185,13 @@ function defaultEligibleTier(
 }
 
 const styles = StyleSheet.create({
-  bar: { paddingHorizontal: spacing.sm, alignItems: 'flex-start' },
+  bar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.sm,
+  },
   content: { padding: spacing.lg, gap: spacing.lg },
-  hero: { width: '100%', aspectRatio: 16 / 9 },
   stats: {
     flexDirection: 'row',
     gap: spacing.lg,

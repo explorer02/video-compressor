@@ -92,6 +92,17 @@ export function thumbnailSource(id: VideoAssetId): string {
   return id;
 }
 
+/**
+ * A source `expo-video` can play.
+ *
+ * As with thumbnails, the asset id is already playable on both platforms — `content://` goes
+ * straight to ExoPlayer, and expo-video's player constructor accepts `ph://` — so previewing a
+ * library video costs nothing and never pays `resolveLocalPath`'s export.
+ */
+export function playbackSource(id: VideoAssetId): string {
+  return id;
+}
+
 export async function assetExists(id: VideoAssetId): Promise<boolean> {
   try {
     await new Asset(id).getFilename();

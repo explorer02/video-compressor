@@ -48,6 +48,40 @@ export function formatDate(epochMs: number | null): string {
   });
 }
 
+/** Date and time, for the detail rows where "when exactly" is the point. */
+export function formatDateTime(epochMs: number | null): string {
+  if (epochMs === null || !Number.isFinite(epochMs)) return '—';
+  return new Date(epochMs).toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+/**
+ * Where a file lives, in the form a gallery app shows: the last two folders of its directory.
+ * A full path is too long to read on a phone and its leading segments are identical for every asset.
+ */
+export function formatFolder(path: string | null): string {
+  if (!path) return '—';
+
+  const segments = decodeURI(path)
+    .replace(/^\w+:\/\//, '')
+    .split('/')
+    .filter(Boolean);
+  const directory = segments.slice(0, -1);
+  return directory.length === 0 ? '—' : directory.slice(-2).join('/');
+}
+
+export function formatCoordinates(
+  location: { latitude: number; longitude: number } | null
+): string | null {
+  if (!location) return null;
+  return `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`;
+}
+
 export function formatResolution(
   width: number | null,
   height: number | null

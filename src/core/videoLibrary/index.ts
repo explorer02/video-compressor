@@ -4,6 +4,7 @@ export {
   listAllVideoIds,
   listAllVideos,
   listVideos,
+  playbackSource,
   resolveLocalPath,
   saveToLibrary,
   subscribeToLibraryChanges,
