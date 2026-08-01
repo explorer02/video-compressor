@@ -2,7 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { File } from 'expo-file-system';
 import { useKeepAwake } from 'expo-keep-awake';
 
-import { beginBackgroundSession } from '../../core/background';
+import {
+  beginBackgroundSession,
+  ensureNotificationPermission,
+} from '../../core/background';
 import { compressToTier } from '../../core/compression/reactNativeCompressor';
 import {
   estimateOutputBytes,
@@ -85,6 +88,10 @@ export function useCompressionJob({
 
     // §7: the job survives backgrounding, and the notification reflects the same progress the
     // screen shows. Tapping it reopens the app, still in the Compressing state.
+    //
+    // The permission prompt is not awaited: encoding starts immediately either way, and the next
+    // progress tick posts the notification once the user has answered.
+    void ensureNotificationPermission();
     const background = beginBackgroundSession(`Compressing ${video.filename}`);
 
     const ticker = setInterval(() => {
