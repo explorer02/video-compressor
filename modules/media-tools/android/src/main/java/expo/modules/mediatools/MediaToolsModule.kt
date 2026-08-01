@@ -63,11 +63,7 @@ class MediaToolsModule : Module() {
     }
 
     AsyncFunction("stopCompressionService") {
-      context.startService(
-        Intent(context, CompressionForegroundService::class.java).apply {
-          action = CompressionForegroundService.ACTION_STOP
-        }
-      )
+      stopService()
     }
   }
 
@@ -186,22 +182,36 @@ class MediaToolsModule : Module() {
     metadata: AssetMetadataInput
   ): Map<String, Any> {
     val uri = Uri.parse(assetId)
+    val capturedAtMs = metadata.capturedAtMs?.toLong()
+    // DATE_TAKEN is milliseconds; DATE_MODIFIED is seconds.
+    val modifiedAtSeconds = metadata.modifiedAtMs?.let { it.toLong() / 1000 }
+
+    // One update for both columns: MediaProvider re-derives values on write, so a second update
+    // can undo the first.
+    val write = writeColumns(
+      uri,
+      buildMap<String, Long> {
+        capturedAtMs?.let { put(MediaStore.Video.Media.DATE_TAKEN, it) }
+        modifiedAtSeconds?.let { put(MediaStore.MediaColumns.DATE_MODIFIED, it) }
+      }
+    )
+
     val applied = mutableListOf<String>()
     val skipped = mutableListOf<Map<String, String>>()
 
-    metadata.capturedAtMs?.let { capturedAt ->
-      // DATE_TAKEN is milliseconds.
-      val millis = capturedAt.toLong()
-      if (writeAndVerify(uri, MediaStore.Video.Media.DATE_TAKEN, millis)) {
-        applied.add("capturedAt")
-      } else {
-        skipped.add(field("capturedAt", "The media store rejected the capture date."))
-      }
+    capturedAtMs?.let { expected ->
+      // DATE_TAKEN is ours to set, so it has to read back exactly.
+      val actual = queryLong(uri, MediaStore.Video.Media.DATE_TAKEN)
+      if (write.succeeded && actual == expected) applied.add("capturedAt")
+      else skipped.add(field("capturedAt", write.explain("wrote $expected, read back $actual")))
     }
 
-    metadata.modifiedAtMs?.let { modifiedAt ->
-      if (applyModifiedAt(uri, modifiedAt.toLong())) applied.add("modifiedAt")
-      else skipped.add(field("modifiedAt", "The media store keeps its own modified date."))
+    modifiedAtSeconds?.let { expected ->
+      // The provider owns DATE_MODIFIED and recomputes it from the file, so an exact read-back is
+      // the wrong success test — stamp the file too and accept the write.
+      val stamped = metadata.modifiedAtMs?.let { stampUnderlyingFile(uri, it.toLong()) } ?: false
+      if (write.succeeded || stamped) applied.add("modifiedAt")
+      else skipped.add(field("modifiedAt", write.explain("wrote $expected, and the file stamp failed")))
     }
 
     if (metadata.latitude != null && metadata.longitude != null) {
@@ -216,26 +226,26 @@ class MediaToolsModule : Module() {
     return mapOf("applied" to applied, "skipped" to skipped)
   }
 
-  /**
-   * DATE_MODIFIED is seconds, and providers routinely recompute it from the file rather than
-   * honouring the written value — so when the column write does not stick, stamp the file itself
-   * and write again.
-   */
-  private fun applyModifiedAt(uri: Uri, modifiedAtMs: Long): Boolean {
-    val seconds = modifiedAtMs / 1000
-    if (writeAndVerify(uri, MediaStore.MediaColumns.DATE_MODIFIED, seconds)) return true
+  /** What a write attempt did, kept whole so a skip can say why rather than just that it failed. */
+  private data class ColumnWrite(val rows: Int, val error: String?) {
+    val succeeded: Boolean get() = rows > 0
 
-    if (!stampUnderlyingFile(uri, modifiedAtMs)) return false
-    return writeAndVerify(uri, MediaStore.MediaColumns.DATE_MODIFIED, seconds)
+    fun explain(detail: String): String = when {
+      error != null -> "The media store threw: $error"
+      rows == 0 -> "The media store accepted no rows for this asset."
+      else -> "The media store overwrote the value: $detail."
+    }
   }
 
-  private fun writeAndVerify(uri: Uri, column: String, value: Long): Boolean {
-    val values = ContentValues().apply { put(column, value) }
-    val updated = runCatching {
-      context.contentResolver.update(uri, values, null, null)
-    }.getOrDefault(0)
+  private fun writeColumns(uri: Uri, columns: Map<String, Long>): ColumnWrite {
+    if (columns.isEmpty()) return ColumnWrite(rows = 0, error = null)
 
-    return updated > 0 && queryLong(uri, column) == value
+    val values = ContentValues().apply { columns.forEach { (name, value) -> put(name, value) } }
+    return runCatching { context.contentResolver.update(uri, values, null, null) }
+      .fold(
+        onSuccess = { ColumnWrite(rows = it, error = null) },
+        onFailure = { ColumnWrite(rows = 0, error = it.message ?: it::class.java.simpleName) }
+      )
   }
 
   private fun stampUnderlyingFile(uri: Uri, modifiedAtMs: Long): Boolean {
@@ -260,6 +270,19 @@ class MediaToolsModule : Module() {
     } else {
       context.startService(intent)
     }
+  }
+
+  /**
+   * Every service call goes through a `Unit`-returning function on purpose: `startService` answers
+   * with a `ComponentName`, and an `AsyncFunction` whose body ends in one tries to send that across
+   * the bridge and rejects the whole call.
+   */
+  private fun stopService() {
+    context.startService(
+      Intent(context, CompressionForegroundService::class.java).apply {
+        action = CompressionForegroundService.ACTION_STOP
+      }
+    )
   }
 }
 

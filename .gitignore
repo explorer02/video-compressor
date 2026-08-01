@@ -40,5 +40,9 @@ yarn-error.*
 /ios
 /android
 
+# Gradle output from local Expo modules — the module source itself stays tracked
+modules/*/android/build/
+modules/*/android/.cxx/
 
+# IDE
 .idea
