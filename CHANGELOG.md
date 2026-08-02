@@ -6,6 +6,29 @@ which always describes the current state of the product.
 
 ## 2026-08-02
 
+- **Batch compression** (the §11 non-goal is lifted): multi-select gains **Compress (N)**. A setup
+  screen picks one tier for the batch, per-video Copy/Replace (with all-copies / all-replace
+  shortcuts), metadata choice for copies, and a totals card. The queue encodes one video at a time
+  and saves each before the next, so a failure or cancel never loses a finished result; Replace
+  originals are deleted via one system dialog after the last encode (deny keeps all originals).
+  Progress shows a duration-weighted bar, ETA, bytes saved, and per-video rows; an interrupted
+  batch is reported on next launch. The single-job pipeline moved to `core/compression/runJob.ts`
+  and saving to `features/outcome/saveOutcome.ts`, shared by both flows.
+- Preview comparison rebuilt: the stage matches the video's own aspect ratio (no more 16:9
+  letterbox for portrait), an **Expand preview** fullscreen view keeps the Original/Compressed
+  switch, and switching sources preserves playback position and play state.
+- Tier estimates on the Selected screen use the source's real frame rate; manual-mode encodes
+  scale bitrate up to 2× for 60 fps, so the old 30 fps assumption understated those outputs ~2×.
+- Replace original asks once: the in-app alert is gone — the system delete dialog is the single
+  confirmation (supersedes §3.4). The button itself states the stakes ("Replace original — free up
+  190 MB").
+- Size filter gained a direction: **At least / Under** a threshold (was ≥-only). Stored
+  pre-direction preferences migrate as "at least"; unknown-size videos are excluded from filtered
+  views instead of counting as 0 bytes.
+- Renamed **CompressHD → ShortenAF** (launcher name, prompts, strings, docs). Bundle id, Expo
+  slug, and internal identifiers stay so existing installs update in place.
+- New app icon: white compress glyph on a blue→cyan gradient — full iOS/Android/favicon/splash set
+  regenerated.
 - Logging trimmed to a permanent diagnostic set now that the saved-dates fix is confirmed: each
   save logs one JS line (mode → asset id) and three native lines (`request` with the asked-for
   dates, MP4 atoms stamped — a warning when zero, the first thing to check if dates regress — and

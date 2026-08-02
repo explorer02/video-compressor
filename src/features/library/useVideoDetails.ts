@@ -11,6 +11,8 @@ export type VideoDetails = {
   capturedAt: number | null;
   modifiedAt: number | null;
   folder: string | null;
+  /** Frames per second, when the platform can report it without resolving the file. */
+  frameRate: number | null;
 };
 
 /**
@@ -22,6 +24,7 @@ export type VideoDetails = {
 export function useVideoDetails(video: LibraryVideo): VideoDetails {
   const [folder, setFolder] = useState<string | null>(null);
   const [capturedAt, setCapturedAt] = useState<number | null>(null);
+  const [frameRate, setFrameRate] = useState<number | null>(null);
 
   useEffect(() => {
     if (!mediaToolsCapabilities.videoProperties) return;
@@ -34,6 +37,7 @@ export function useVideoDetails(video: LibraryVideo): VideoDetails {
 
         setFolder(properties.folder);
         setCapturedAt(properties.capturedAtMs);
+        setFrameRate(properties.frameRate);
       } catch (error) {
         console.warn('[library] could not read video details', error);
       }
@@ -48,5 +52,6 @@ export function useVideoDetails(video: LibraryVideo): VideoDetails {
     capturedAt: capturedAt ?? video.createdAt,
     modifiedAt: video.modifiedAt,
     folder,
+    frameRate,
   };
 }

@@ -187,9 +187,8 @@ No backend — everything on-device.
 
 ## 11. Non-goals (v1)
 
-No batch compression (batch _delete_ exists, see §4), no trimming/editing, no photos, no cloud
-upload, no custom bitrate input (tiers only), no folder/album navigation, no filename search
-(flat all-videos list only).
+No trimming/editing, no photos, no cloud upload, no custom bitrate input (tiers only), no
+folder/album navigation, no filename search (flat all-videos list only).
 
 ## 12. Acceptance criteria
 

@@ -27,8 +27,11 @@ export {
 
 export {
   DEFAULT_SORT,
-  SIZE_FILTERS,
+  matchesSizeFilter,
+  sameSizeFilter,
+  SIZE_FILTER_THRESHOLDS,
   type SizeFilter,
+  type SizeFilterDirection,
   type LibraryVideo,
   type MediaAccess,
   type SortDirection,

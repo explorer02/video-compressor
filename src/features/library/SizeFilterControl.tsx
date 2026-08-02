@@ -1,8 +1,12 @@
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet } from 'react-native';
+import { Modal, Pressable, StyleSheet, View } from 'react-native';
 
 import { formatBytes } from '../../core/format';
-import { SIZE_FILTERS, type SizeFilter } from '../../core/videoLibrary';
+import {
+  SIZE_FILTER_THRESHOLDS,
+  type SizeFilter,
+  type SizeFilterDirection,
+} from '../../core/videoLibrary';
 import { colors, radius, spacing } from '../../theme';
 import { AppText } from '../../ui';
 
@@ -12,8 +16,16 @@ export type SizeFilterControlProps = {
   onChange: (filter: SizeFilter) => void;
 };
 
+/** The chip and sheet share one wording for a filter, so the list always reads as filtered. */
+export function sizeFilterLabel(filter: SizeFilter): string {
+  if (filter === null) return 'Any size';
+  const sign = filter.direction === 'atLeast' ? '≥' : '<';
+  return `${sign} ${formatBytes(filter.bytes)}`;
+}
+
 /**
- * Hides videos below a chosen size (§4).
+ * Keeps videos on one side of a chosen size (§4) — at least it, for finding what is worth
+ * compressing, or under it, for checking what already fits.
  *
  * A sheet rather than inline options: nine thresholds would not fit across a phone, and the active
  * one is worth showing as a label anyway so a filtered list never looks like a short library.
@@ -24,10 +36,21 @@ export function SizeFilterControl({
   onChange,
 }: SizeFilterControlProps) {
   const [open, setOpen] = useState(false);
+  // The sheet's direction outlives any one threshold pick, so flipping it re-aims the current
+  // filter instead of resetting it.
+  const [direction, setDirection] = useState<SizeFilterDirection>(
+    value?.direction ?? 'atLeast'
+  );
 
-  const choose = (filter: SizeFilter) => {
-    onChange(filter);
+  const choose = (bytes: number | null) => {
+    onChange(bytes === null ? null : { direction, bytes });
     setOpen(false);
+  };
+
+  const flipDirection = (next: SizeFilterDirection) => {
+    setDirection(next);
+    // An active filter follows the flip immediately — the sheet stays open for a threshold change.
+    if (value !== null) onChange({ direction: next, bytes: value.bytes });
   };
 
   return (
@@ -48,7 +71,7 @@ export function SizeFilterControl({
           tone={value === null ? 'muted' : 'accent'}
           numberOfLines={1}
         >
-          {labelFor(value)}
+          {sizeFilterLabel(value)}
         </AppText>
       </Pressable>
 
@@ -61,27 +84,34 @@ export function SizeFilterControl({
         <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
           <Pressable style={styles.sheet}>
             <AppText variant="captionStrong" tone="muted">
-              SHOW VIDEOS OF AT LEAST
+              SHOW VIDEOS THAT ARE
             </AppText>
 
-            {SIZE_FILTERS.map(filter => (
-              <Pressable
-                key={String(filter)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: filter === value }}
-                onPress={() => choose(filter)}
-                style={({ pressed }) => [
-                  styles.option,
-                  pressed ? styles.optionPressed : null,
-                ]}
-              >
-                <AppText
-                  variant={filter === value ? 'bodyStrong' : 'body'}
-                  tone={filter === value ? 'accent' : 'default'}
-                >
-                  {labelFor(filter)}
-                </AppText>
-              </Pressable>
+            <View style={styles.directions}>
+              <DirectionPill
+                label="At least"
+                selected={direction === 'atLeast'}
+                onPress={() => flipDirection('atLeast')}
+              />
+              <DirectionPill
+                label="Under"
+                selected={direction === 'under'}
+                onPress={() => flipDirection('under')}
+              />
+            </View>
+
+            <FilterOption
+              label="Any size"
+              selected={value === null}
+              onPress={() => choose(null)}
+            />
+            {SIZE_FILTER_THRESHOLDS.map(bytes => (
+              <FilterOption
+                key={bytes}
+                label={sizeFilterLabel({ direction, bytes })}
+                selected={value?.bytes === bytes}
+                onPress={() => choose(bytes)}
+              />
             ))}
           </Pressable>
         </Pressable>
@@ -90,8 +120,59 @@ export function SizeFilterControl({
   );
 }
 
-function labelFor(filter: SizeFilter): string {
-  return filter === null ? 'Any size' : `≥ ${formatBytes(filter)}`;
+function DirectionPill({
+  label,
+  selected,
+  onPress,
+}: {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={[styles.pill, selected ? styles.pillSelected : null]}
+    >
+      <AppText
+        variant="captionStrong"
+        tone={selected ? 'accent' : 'muted'}
+      >
+        {label}
+      </AppText>
+    </Pressable>
+  );
+}
+
+function FilterOption({
+  label,
+  selected,
+  onPress,
+}: {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.option,
+        pressed ? styles.optionPressed : null,
+      ]}
+    >
+      <AppText
+        variant={selected ? 'bodyStrong' : 'body'}
+        tone={selected ? 'accent' : 'default'}
+      >
+        {label}
+      </AppText>
+    </Pressable>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -116,6 +197,24 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
     backgroundColor: colors.background,
+  },
+  directions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  pill: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  pillSelected: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accentSoft,
   },
   option: {
     paddingVertical: spacing.md,

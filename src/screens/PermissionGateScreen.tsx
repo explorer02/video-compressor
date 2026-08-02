@@ -15,9 +15,9 @@ export function PermissionGateScreen({ access }: { access: MediaAccessState }) {
   return (
     <Screen>
       <View style={styles.body}>
-        <AppText variant="title">Let CompressHD see your videos</AppText>
+        <AppText variant="title">Let ShortenAF see your videos</AppText>
         <AppText variant="body" tone="muted">
-          CompressHD browses the videos already on this device so you can pick
+          ShortenAF browses the videos already on this device so you can pick
           one and shrink it. Nothing is uploaded — every video stays on your
           phone.
         </AppText>
@@ -32,7 +32,7 @@ export function PermissionGateScreen({ access }: { access: MediaAccessState }) {
 
         {exhausted ? (
           <AppText variant="caption" tone="muted">
-            Video access is currently turned off for CompressHD.
+            Video access is currently turned off for ShortenAF.
           </AppText>
         ) : null}
       </View>

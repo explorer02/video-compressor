@@ -12,7 +12,7 @@ import type {
   SourceVideo,
 } from '../../core/compression/types';
 import type { LibraryVideo } from '../../core/videoLibrary';
-import type { Flow, FlowState } from './types';
+import type { BatchPlan, Flow, FlowState } from './types';
 
 const FlowContext = createContext<Flow | null>(null);
 
@@ -39,6 +39,16 @@ export function FlowProvider({ children }: { children: ReactNode }) {
 
         backToLibrary: () => setState(LIBRARY),
 
+        startBatchSetup: (videos: LibraryVideo[]) =>
+          setState(videos.length > 0 ? { name: 'batchSetup', videos } : LIBRARY),
+
+        startBatch: (plan: BatchPlan) =>
+          setState(current =>
+            current.name === 'batchSetup' && plan.items.length > 0
+              ? { name: 'batchCompressing', plan }
+              : current
+          ),
+
         backToSelection: () =>
           setState(current => {
             const video = videoOf(current);
@@ -58,7 +68,7 @@ export function useFlow(): Flow {
   return flow;
 }
 
-/** Every state past `library` knows which video it came from — this is where that lives. */
+/** Every single-video state past `library` knows which video it came from; batch states do not. */
 function videoOf(state: FlowState): LibraryVideo | null {
   switch (state.name) {
     case 'selected':
@@ -67,6 +77,8 @@ function videoOf(state: FlowState): LibraryVideo | null {
     case 'preview':
       return state.outcome.video;
     case 'library':
+    case 'batchSetup':
+    case 'batchCompressing':
       return null;
   }
 }

@@ -23,6 +23,8 @@ export type ActiveJob = {
   assetId: VideoAssetId;
   tierId: QualityTierId;
   startedAt: number;
+  /** Present when the job ran as part of a batch — recovery wording depends on it. */
+  batch?: { index: number; total: number };
 };
 
 export const workspace = {

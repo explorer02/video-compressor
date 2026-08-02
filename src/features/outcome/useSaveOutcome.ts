@@ -1,26 +1,13 @@
 import { useCallback, useState } from 'react';
 
 import type { CompressionOutcome } from '../../core/compression/types';
-import {
-  applySavedAssetMetadata,
-  type AppliedMetadataReport,
-} from '../../core/metadata';
-import {
-  assetExists,
-  deleteAssets,
-  saveCarriesMetadata,
-  saveToLibrary,
-  type SaveTarget,
-} from '../../core/videoLibrary';
+import { assetExists, deleteAssets } from '../../core/videoLibrary';
 import { workspace } from '../../core/workspace';
+import { saveCompressedCopy, savedMessage, type SaveMode } from './saveOutcome';
 
-/**
- * §3.4 — what happens to a finished compression.
- *
- * `fresh` saves a new gallery asset dated now with no location. `original` additionally copies the
- * source's capture date and GPS onto the saved asset, which needs the native module.
- */
-export type SaveMode = 'fresh' | 'original';
+/** §3.4 — what happens to a finished compression. */
+
+export type { SaveMode };
 
 export type SaveOutcomeOptions = {
   outcome: CompressionOutcome;
@@ -51,10 +38,7 @@ export function useSaveOutcome({
 
       void (async () => {
         try {
-          const report = await saveWithMetadata(outcome, mode);
-
-          // The gallery has its own copy now; ours is just a temp file.
-          workspace.discard(outcome.outputPath);
+          const report = await saveCompressedCopy(outcome, mode);
           onSaved(savedMessage(mode, report));
         } catch (error) {
           console.warn('[outcome] failed to save copy', error);
@@ -80,8 +64,7 @@ export function useSaveOutcome({
 
     void (async () => {
       try {
-        await saveWithMetadata(outcome, 'original');
-        workspace.discard(outcome.outputPath);
+        await saveCompressedCopy(outcome, 'original');
 
         await deleteAssets([outcome.source.assetId]);
         const originalSurvived = await assetExists(outcome.source.assetId);
@@ -106,74 +89,4 @@ export function useSaveOutcome({
   }, [onDiscarded, outcome.outputPath]);
 
   return { busy, saveCopy, replaceOriginal, discard };
-}
-
-/**
- * Saves the encode, carrying the source's folder and dates when asked for.
- *
- * Where the platform sets metadata as the asset is created, that is the whole job and nothing can
- * be partially applied. Where it does not, the asset is created first and the dates written
- * afterwards — the path that can fail per field, which is what the report describes.
- */
-async function saveWithMetadata(
-  outcome: CompressionOutcome,
-  mode: SaveMode
-): Promise<AppliedMetadataReport | null> {
-  const { source, outputPath } = outcome;
-  const target = saveTargetFor(outcome, mode);
-
-  const savedAssetId = await saveToLibrary(outputPath, target);
-  // One line per save; the native side logs the detail (`adb logcat -s MediaTools`).
-  console.log(`[save] mode=${mode} → ${savedAssetId}`);
-
-  if (mode !== 'original') return null;
-  if (saveCarriesMetadata) {
-    return { applied: ['capturedAt', 'modifiedAt'], skipped: [] };
-  }
-  return applySavedAssetMetadata(savedAssetId, source);
-}
-
-/** Only an "original" save carries the source's dates — a fresh copy is deliberately dated now. */
-function saveTargetFor(
-  { source, outputPath }: CompressionOutcome,
-  mode: SaveMode
-): SaveTarget {
-  const keepOriginal = mode === 'original';
-
-  return {
-    filename: filenameOf(outputPath),
-    // Even a fresh-metadata copy belongs beside the original rather than in the camera folder.
-    ...(source.folder ? { folder: source.folder } : {}),
-    ...(keepOriginal && source.capturedAt !== null
-      ? { capturedAtMs: source.capturedAt }
-      : {}),
-    ...(keepOriginal && source.modifiedAt !== null
-      ? { modifiedAtMs: source.modifiedAt }
-      : {}),
-  };
-}
-
-function filenameOf(path: string): string {
-  return decodeURI(path).split('/').pop() || 'video.mp4';
-}
-
-/**
- * §8 requires that fields which could not be carried over are surfaced, not silently dropped.
- *
- * The claim is built from what was actually applied rather than from an empty skip list: a field
- * the source never had produces neither an applied nor a skipped entry, so an absent skip is not
- * evidence that anything was carried over.
- */
-function savedMessage(
-  mode: SaveMode,
-  report: AppliedMetadataReport | null
-): string {
-  if (mode === 'fresh') return 'Saved to your gallery.';
-
-  const applied = new Set(report?.applied ?? []);
-  if (applied.has('capturedAt') && applied.has('modifiedAt')) {
-    return 'Saved with the original dates.';
-  }
-  if (applied.has('capturedAt')) return 'Saved with the original capture date.';
-  return 'Saved to your gallery, but the original dates could not be kept.';
 }

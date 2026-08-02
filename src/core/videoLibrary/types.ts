@@ -32,17 +32,21 @@ export type VideoSort = {
 
 export const DEFAULT_SORT: VideoSort = { key: 'createdAt', direction: 'desc' };
 
+/** `atLeast` finds the videos worth compressing; `under` finds what already fits somewhere. */
+export type SizeFilterDirection = 'atLeast' | 'under';
+
 /**
- * Hides everything below the chosen size, for finding the videos worth acting on.
- * `null` is "no filter" — the whole library.
+ * Keeps only videos on one side of a size threshold. `null` is "no filter" — the whole library.
  */
-export type SizeFilter = number | null;
+export type SizeFilter = {
+  direction: SizeFilterDirection;
+  bytes: number;
+} | null;
 
 const MB = 1000 * 1000;
 
 /** The offered thresholds, in bytes. The control renders from this list. */
-export const SIZE_FILTERS: SizeFilter[] = [
-  null,
+export const SIZE_FILTER_THRESHOLDS: number[] = [
   1 * MB,
   2 * MB,
   5 * MB,
@@ -52,6 +56,21 @@ export const SIZE_FILTERS: SizeFilter[] = [
   100 * MB,
   500 * MB,
 ];
+
+/** Value equality — filters are objects, so `===` only ever matches "no filter". */
+export function sameSizeFilter(a: SizeFilter, b: SizeFilter): boolean {
+  if (a === null || b === null) return a === b;
+  return a.direction === b.direction && a.bytes === b.bytes;
+}
+
+export function matchesSizeFilter(
+  sizeBytes: number,
+  filter: NonNullable<SizeFilter>
+): boolean {
+  return filter.direction === 'atLeast'
+    ? sizeBytes >= filter.bytes
+    : sizeBytes < filter.bytes;
+}
 
 /**
  * Access the user has granted to the video library. `limited` means iOS Limited Photos or the

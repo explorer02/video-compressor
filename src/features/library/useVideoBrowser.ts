@@ -6,9 +6,11 @@ import {
   listAllVideoIds,
   listAllVideos,
   listVideos,
+  matchesSizeFilter,
   nextSort,
   readStoredSizeFilter,
   readStoredSort,
+  sameSizeFilter,
   storeSizeFilter,
   storeSort,
   subscribeToLibraryChanges,
@@ -287,10 +289,15 @@ async function scanLibrary(
   const all = await listAllVideos(mediaStoreSort(sort));
   await sizeIndex.ensure(all);
 
+  // A video whose size is unknown is left out of a filtered view rather than counted as 0 bytes —
+  // an "under 10 MB" list must not claim files nobody has measured.
   const matching =
     sizeFilter === null
       ? all
-      : all.filter(video => (sizeIndex.get(video) ?? 0) >= sizeFilter);
+      : all.filter(video => {
+          const sizeBytes = sizeIndex.get(video);
+          return sizeBytes !== null && matchesSizeFilter(sizeBytes, sizeFilter);
+        });
 
   return sort.key === 'size' ? rankBySize(matching, sort.direction) : matching;
 }
@@ -329,7 +336,7 @@ function matchesView(
   return (
     loaded.sort.key === sort.key &&
     loaded.sort.direction === sort.direction &&
-    loaded.sizeFilter === sizeFilter
+    sameSizeFilter(loaded.sizeFilter, sizeFilter)
   );
 }
 

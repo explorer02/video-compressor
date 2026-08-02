@@ -50,9 +50,11 @@ export function SelectedScreen({
   useHardwareBack(onBack);
   const details = useVideoDetails(video);
   const sizeBytes = sizeIndex.get(video);
+  // The real frame rate matters: a 60 fps source doubles the manual bitrate at encode time, so
+  // estimating at the 30 fps assumption would show half the size the encoder is about to produce.
   const facts = useMemo(
-    () => sourceFactsFrom(video, sizeBytes),
-    [sizeBytes, video]
+    () => sourceFactsFrom(video, sizeBytes, details.frameRate ?? undefined),
+    [details.frameRate, sizeBytes, video]
   );
 
   const [tier, setTier] = useState<QualityTierId | null>(() =>

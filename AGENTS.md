@@ -1,4 +1,4 @@
-# CompressHD — agent guide
+# ShortenAF — agent guide
 
 On-device video compressor (iOS + Android), Expo + TypeScript, no backend.
 [product.md](product.md) is the spec — read it before changing anything.
@@ -13,7 +13,7 @@ Every feature added, changed, or removed updates both files in the same change:
 
 - [product.md](product.md) — the current state of the product; edit the relevant sections so the
   doc always matches the app.
-- [CHANGELOG.md](CHANGELOG.md) — a dated entry (newest date first) describing the change.
+- [CHANGELOG.md](CHANGELOG.md) — a dated concise entry (newest date first) describing the change.
 
 ## Commands
 

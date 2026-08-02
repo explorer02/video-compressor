@@ -4,7 +4,10 @@ import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
 
 import { formatBytes } from '../core/format';
 import type { LibraryVideo, MediaAccessState } from '../core/videoLibrary';
-import { SizeFilterControl } from '../features/library/SizeFilterControl';
+import {
+  SizeFilterControl,
+  sizeFilterLabel,
+} from '../features/library/SizeFilterControl';
 import { SortToolbar } from '../features/library/SortToolbar';
 import { useDeleteVideos } from '../features/library/useDeleteVideos';
 import { useVideoBrowser } from '../features/library/useVideoBrowser';
@@ -25,10 +28,16 @@ import {
 export type LibraryScreenProps = {
   access: MediaAccessState;
   onSelect: (video: LibraryVideo) => void;
+  /** The multi-select "Compress" action — hands the selection to the batch flow. */
+  onCompressMany: (videos: LibraryVideo[]) => void;
 };
 
 /** The §4 video browser: the app's home screen and its only entry point into compression. */
-export function LibraryScreen({ access, onSelect }: LibraryScreenProps) {
+export function LibraryScreen({
+  access,
+  onSelect,
+  onCompressMany,
+}: LibraryScreenProps) {
   const toast = useToast();
   const browser = useVideoBrowser(
     access.access === 'granted' || access.access === 'limited'
@@ -102,6 +111,11 @@ export function LibraryScreen({ access, onSelect }: LibraryScreenProps) {
           selectingAll={selectingAll}
           busy={deletion.busy}
           onToggleAll={toggleSelectAll}
+          onCompress={() => {
+            const videos = selection.videos;
+            selection.exit();
+            onCompressMany(videos);
+          }}
           onDelete={() =>
             confirmDelete(selection.count, () =>
               deletion.remove(selection.videos)
@@ -135,7 +149,7 @@ export function LibraryScreen({ access, onSelect }: LibraryScreenProps) {
 
       {access.access === 'limited' ? (
         <Banner
-          message="CompressHD can only see the videos you selected."
+          message="ShortenAF can only see the videos you selected."
           action={{
             label: 'Manage access',
             onPress: () => void access.manageAccess(),
@@ -174,6 +188,7 @@ function SelectionBar({
   selectingAll,
   busy,
   onToggleAll,
+  onCompress,
   onDelete,
   onDone,
 }: {
@@ -182,6 +197,7 @@ function SelectionBar({
   selectingAll: boolean;
   busy: boolean;
   onToggleAll: () => void;
+  onCompress: () => void;
   onDelete: () => void;
   onDone: () => void;
 }) {
@@ -203,6 +219,12 @@ function SelectionBar({
           size="sm"
           busy={selectingAll}
           onPress={onToggleAll}
+        />
+        <Button
+          label={count > 0 ? `Compress (${count})` : 'Compress'}
+          size="sm"
+          disabled={count === 0 || busy}
+          onPress={onCompress}
         />
         <Button
           label={count > 0 ? `Delete (${count})` : 'Delete'}
@@ -245,10 +267,13 @@ function LibraryPlaceholder({
 
   // A filter hiding everything is not an empty library, and saying so avoids a pointless hunt.
   if (browser.sizeFilter !== null) {
+    const under = browser.sizeFilter.direction === 'under';
     return (
       <EmptyState
-        title="No videos this large"
-        message={`Nothing in your library is ${formatBytes(browser.sizeFilter)} or bigger.`}
+        title={under ? 'No videos this small' : 'No videos this large'}
+        message={`Nothing in your library is ${
+          under ? 'under' : ''
+        } ${formatBytes(browser.sizeFilter.bytes)}${under ? '' : ' or bigger'}.`}
         action={{
           label: 'Clear filter',
           onPress: () => browser.setSizeFilter(null),
@@ -315,7 +340,7 @@ function headerSubtitle(
   }
 
   if (sizeFilter !== null && libraryCount !== null) {
-    return `${totalCount} of ${libraryCount} videos · ≥ ${formatBytes(sizeFilter)}`;
+    return `${totalCount} of ${libraryCount} videos · ${sizeFilterLabel(sizeFilter)}`;
   }
 
   const count = `${totalCount} ${plural(totalCount, 'video')}`;

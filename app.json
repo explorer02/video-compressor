@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "CompressHD",
+    "name": "ShortenAF",
     "slug": "video-compressor",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -10,14 +10,14 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.compresshd.app",
       "infoPlist": {
-        "NSPhotoLibraryUsageDescription": "CompressHD needs access to your videos so you can browse and compress them.",
-        "NSPhotoLibraryAddUsageDescription": "CompressHD saves compressed videos back to your photo library."
+        "NSPhotoLibraryUsageDescription": "ShortenAF needs access to your videos so you can browse and compress them.",
+        "NSPhotoLibraryAddUsageDescription": "ShortenAF saves compressed videos back to your photo library."
       }
     },
     "android": {
       "package": "com.compresshd.app",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#0A66FF",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -44,8 +44,8 @@
       [
         "expo-media-library",
         {
-          "photosPermission": "CompressHD needs access to your videos so you can browse and compress them.",
-          "savePhotosPermission": "CompressHD saves compressed videos back to your photo library.",
+          "photosPermission": "ShortenAF needs access to your videos so you can browse and compress them.",
+          "savePhotosPermission": "ShortenAF saves compressed videos back to your photo library.",
           "isAccessMediaLocationEnabled": true,
           "granularPermissions": ["video"]
         }

@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import type { CompressionOutcome } from '../core/compression/types';
 import {
@@ -12,6 +11,7 @@ import {
 } from '../core/format';
 import { canKeepOriginalMetadata } from '../core/metadata';
 import { playbackSource } from '../core/videoLibrary';
+import { ComparisonStage } from '../features/outcome/ComparisonStage';
 import { useSaveOutcome } from '../features/outcome/useSaveOutcome';
 import { colors, radius, spacing } from '../theme';
 import {
@@ -19,11 +19,8 @@ import {
   Button,
   DetailList,
   Screen,
-  SegmentedControl,
   useHardwareBack,
   useToast,
-  VideoStage,
-  type Segment,
 } from '../ui';
 
 export type PreviewScreenProps = {
@@ -32,16 +29,8 @@ export type PreviewScreenProps = {
 };
 
 /** §3.4 — watch the result, see what it saved, then decide what happens to it. */
-type Showing = 'original' | 'compressed';
-
-const COMPARE_SEGMENTS: Segment<Showing>[] = [
-  { value: 'original', label: 'Original' },
-  { value: 'compressed', label: 'Compressed' },
-];
-
 export function PreviewScreen({ outcome, onFinished }: PreviewScreenProps) {
   const toast = useToast();
-  const [showing, setShowing] = useState<Showing>('compressed');
 
   const save = useSaveOutcome({
     outcome,
@@ -66,20 +55,10 @@ export function PreviewScreen({ outcome, onFinished }: PreviewScreenProps) {
       <ScrollView contentContainerStyle={styles.content}>
         {/* One player, two sources: flipping between them on the same scene is what makes a
             quality difference visible, which two small players side by side would not. */}
-        <SegmentedControl
-          segments={COMPARE_SEGMENTS}
-          value={showing}
-          onChange={setShowing}
-        />
-
-        <VideoStage
-          source={
-            showing === 'original'
-              ? playbackSource(outcome.video.id)
-              : outcome.outputPath
-          }
-          autoPlay
-          loop
+        <ComparisonStage
+          original={playbackSource(outcome.video.id)}
+          compressed={outcome.outputPath}
+          source={outcome.source}
         />
 
         <View style={styles.comparison}>
@@ -121,12 +100,14 @@ export function PreviewScreen({ outcome, onFinished }: PreviewScreenProps) {
           busy={save.busy}
           onPress={() => save.saveCopy('fresh')}
         />
+        {/* No in-app confirmation: the OS shows its own unavoidable delete dialog, and a second
+            prompt of ours in front of it read as asking twice. The stakes go on the button. */}
         <Button
-          label="Replace original"
+          label={replaceLabel(outcome)}
           variant="danger"
-          hint="Deletes the original video"
+          hint="Deletes the original video — the system will ask to confirm"
           disabled={save.busy}
-          onPress={() => confirmReplace(save.replaceOriginal)}
+          onPress={save.replaceOriginal}
         />
         <Button
           label="Discard"
@@ -186,19 +167,12 @@ function Measure({
   );
 }
 
-/**
- * §3.4 — our own warning first. The OS will show its own delete confirmation afterwards, which
- * cannot be bypassed, but by then the user has already agreed to the intent.
- */
-function confirmReplace(onConfirm: () => void): void {
-  Alert.alert(
-    'Replace the original?',
-    'The compressed video is saved to your gallery and the original is deleted. This can\u2019t be undone.',
-    [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Replace', style: 'destructive', onPress: onConfirm },
-    ]
-  );
+/** What replacing is worth, on the button that does it — the screen's one number that matters. */
+function replaceLabel(outcome: CompressionOutcome): string {
+  const freed = outcome.source.sizeBytes - outcome.outputSizeBytes;
+  return freed > 0
+    ? `Replace original \u2014 free up ${formatBytes(freed)}`
+    : 'Replace original';
 }
 
 const styles = StyleSheet.create({

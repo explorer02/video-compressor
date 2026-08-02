@@ -1,8 +1,9 @@
 import { openJsonStore } from '../storage';
 import {
   DEFAULT_SORT,
-  SIZE_FILTERS,
+  SIZE_FILTER_THRESHOLDS,
   type SizeFilter,
+  type SizeFilterDirection,
   type SortDirection,
   type VideoSort,
   type VideoSortKey,
@@ -26,12 +27,22 @@ export function storeSort(sort: VideoSort): void {
   openJsonStore(STORE).set(KEY, sort);
 }
 
+const FILTER_DIRECTIONS: SizeFilterDirection[] = ['atLeast', 'under'];
+
 export function readStoredSizeFilter(): SizeFilter {
   const stored = openJsonStore(STORE).get<unknown>(SIZE_FILTER_KEY);
-  // Only a threshold the app still offers; a stored value from an older build is discarded.
-  return SIZE_FILTERS.includes(stored as SizeFilter)
-    ? (stored as SizeFilter)
-    : null;
+  if (isSizeFilter(stored)) return stored;
+
+  // Builds before the direction existed stored the bare threshold; those were all "at least".
+  if (
+    typeof stored === 'number' &&
+    SIZE_FILTER_THRESHOLDS.includes(stored)
+  ) {
+    return { direction: 'atLeast', bytes: stored };
+  }
+
+  // Anything else the app no longer offers is discarded rather than guessed at.
+  return null;
 }
 
 export function storeSizeFilter(filter: SizeFilter): void {
@@ -45,6 +56,15 @@ export function nextSort(current: VideoSort, key: VideoSortKey): VideoSort {
     key,
     direction: current.direction === 'desc' ? 'asc' : 'desc',
   };
+}
+
+function isSizeFilter(value: unknown): value is NonNullable<SizeFilter> {
+  if (typeof value !== 'object' || value === null) return false;
+  const candidate = value as Partial<NonNullable<SizeFilter>>;
+  return (
+    FILTER_DIRECTIONS.includes(candidate.direction as SizeFilterDirection) &&
+    SIZE_FILTER_THRESHOLDS.includes(candidate.bytes as number)
+  );
 }
 
 function isVideoSort(value: unknown): value is VideoSort {

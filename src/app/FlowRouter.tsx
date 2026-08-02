@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 
 import { useMediaAccess } from '../core/videoLibrary';
 import { workspace } from '../core/workspace';
+import { BatchCompressingScreen } from '../screens/BatchCompressingScreen';
+import { BatchSetupScreen } from '../screens/BatchSetupScreen';
 import { CompressingScreen } from '../screens/CompressingScreen';
 import { LibraryScreen } from '../screens/LibraryScreen';
 import { PermissionGateScreen } from '../screens/PermissionGateScreen';
@@ -28,7 +30,28 @@ export function FlowRouter() {
 
   switch (state.name) {
     case 'library':
-      return <LibraryScreen access={access} onSelect={actions.select} />;
+      return (
+        <LibraryScreen
+          access={access}
+          onSelect={actions.select}
+          onCompressMany={actions.startBatchSetup}
+        />
+      );
+    case 'batchSetup':
+      return (
+        <BatchSetupScreen
+          videos={state.videos}
+          onBack={actions.backToLibrary}
+          onStart={actions.startBatch}
+        />
+      );
+    case 'batchCompressing':
+      return (
+        <BatchCompressingScreen
+          plan={state.plan}
+          onDone={actions.backToLibrary}
+        />
+      );
     case 'selected':
       return (
         <SelectedScreen
@@ -67,7 +90,11 @@ function useInterruptedJobNotice(): void {
   useEffect(() => {
     const interrupted = workspace.recoverOnLaunch();
     if (interrupted) {
-      toast.show('A compression was interrupted — you can start it again.');
+      toast.show(
+        interrupted.batch
+          ? `A batch was interrupted at video ${interrupted.batch.index} of ${interrupted.batch.total} — videos finished earlier are already saved.`
+          : 'A compression was interrupted — you can start it again.'
+      );
     }
   }, [toast]);
 }
