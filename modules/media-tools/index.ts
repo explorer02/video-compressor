@@ -49,9 +49,12 @@ export type AppliedMetadataReport = {
 
 export type ServiceNotification = {
   title: string;
-  text: string;
   /** Whole percent, 0–100. */
   progress: number;
+  /** e.g. "1 min 12 s elapsed". */
+  elapsed: string;
+  /** e.g. "2 min 5 s left". */
+  remaining: string;
 };
 
 type MediaToolsNative = {

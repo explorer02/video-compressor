@@ -7,10 +7,13 @@ On-device video compressor (iOS + Android), Expo + TypeScript, no backend.
 
 Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before writing any code.
 
-## Changelog rule (mandatory)
+## Documentation rule (mandatory)
 
-Every feature added, changed, or removed gets an entry in the **Changelog** section of
-[product.md](product.md), in the same change. Do not rewrite the existing spec sections (§1–§11).
+Every feature added, changed, or removed updates both files in the same change:
+
+- [product.md](product.md) — the current state of the product; edit the relevant sections so the
+  doc always matches the app.
+- [CHANGELOG.md](CHANGELOG.md) — a dated entry (newest date first) describing the change.
 
 ## Commands
 

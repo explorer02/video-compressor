@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- §7 progress notification: filename, then percent (left) vs time remaining (right), a progress
+     bar, and elapsed time under it. Text styles come from androidx.core's notification set so the
+     colors follow the system's light/dark notification theme. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="match_parent"
+  android:layout_height="wrap_content"
+  android:orientation="vertical"
+  android:paddingTop="4dp"
+  android:paddingBottom="4dp">
+
+  <TextView
+    android:id="@+id/notification_title"
+    style="@style/TextAppearance.Compat.Notification.Title"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:singleLine="true"
+    android:ellipsize="middle" />
+
+  <RelativeLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="8dp">
+
+    <TextView
+      android:id="@+id/notification_percent"
+      style="@style/TextAppearance.Compat.Notification.Title"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:layout_alignParentStart="true" />
+
+    <TextView
+      android:id="@+id/notification_remaining"
+      style="@style/TextAppearance.Compat.Notification"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:layout_alignParentEnd="true"
+      android:layout_alignBaseline="@id/notification_percent" />
+  </RelativeLayout>
+
+  <ProgressBar
+    android:id="@+id/notification_progress"
+    style="@android:style/Widget.Material.ProgressBar.Horizontal"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="2dp"
+    android:progressTint="#0A66FF" />
+
+  <TextView
+    android:id="@+id/notification_elapsed"
+    style="@style/TextAppearance.Compat.Notification.Line2"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="2dp" />
+</LinearLayout>

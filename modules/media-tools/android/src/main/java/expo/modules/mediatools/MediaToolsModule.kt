@@ -7,13 +7,19 @@ import android.content.Intent
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.MediaStore
+import android.util.Log
 import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.records.Field
 import expo.modules.kotlin.records.Record
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * The four things the app needs that no JavaScript dependency can provide (§7, §8):
@@ -27,10 +33,15 @@ class MediaToolsModule : Module() {
   private companion object {
     /** §5's output container; the encoder never produces anything else. */
     const val MP4_MIME_TYPE = "video/mp4"
+
+    /** `adb logcat -s MediaTools` follows a save end to end. */
+    const val TAG = "MediaTools"
   }
 
   private val context: Context
     get() = appContext.reactContext ?: throw Exceptions.ReactContextLost()
+
+  private val resolver get() = context.contentResolver
 
   override fun definition() = ModuleDefinition {
     Name("MediaTools")
@@ -65,11 +76,11 @@ class MediaToolsModule : Module() {
     }
 
     AsyncFunction("startCompressionService") { options: ServiceNotification ->
-      sendToService(CompressionForegroundService.ACTION_START, options)
+      startService(options)
     }
 
     AsyncFunction("updateCompressionProgress") { options: ServiceNotification ->
-      sendToService(CompressionForegroundService.ACTION_UPDATE, options)
+      updateNotification(options)
     }
 
     AsyncFunction("stopCompressionService") {
@@ -181,51 +192,137 @@ class MediaToolsModule : Module() {
   /**
    * §8: saves a finished encode into the gallery, in the source's own folder, carrying its dates.
    *
-   * Everything is set in the insert rather than updated afterwards. MediaProvider honours the values
-   * a row is created with, but is free to recompute or ignore the same columns on a later `update` —
-   * which is precisely why the previous write-back reported the dates as refused.
+   * The dates go into the MP4's own header atoms first, because the media store's columns are not
+   * durable: publishing the row triggers an asynchronous scan that re-derives DATE_TAKEN from the
+   * file's `creation_time` — which the encoder wrote as "now" — and can land after any column
+   * write of ours. Once the file itself carries the source's dates, every scan converges on them.
+   * The column writes at insert and publish then only cover the window before that scan runs.
    *
    * `IS_PENDING` keeps the row invisible to other apps until the bytes are in, so no gallery ever
    * shows a half-written video.
    */
   private fun saveVideo(options: SaveVideoInput): String {
-    val resolver = context.contentResolver
-    val collection = MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+    // Request and outcome bracket every save, so a metadata bug report needs no extra build.
+    Log.i(TAG, "[save] request ${describe(options)}")
 
+    stampOutputFileDates(options)
+
+    val uri = insertPendingRow(options)
+    copyBytesInto(uri, options.path)
+    publish(uri, options)
+    assertDates(uri, options)
+
+    Log.i(TAG, "[save] final ${readColumns(uri)}")
+    return uri.toString()
+  }
+
+  /**
+   * Patches the encode's `mvhd`/`tkhd`/`mdhd` atoms to the source's dates before the bytes leave
+   * our temp directory. The file is workspace-owned and about to be discarded, so mutating it is
+   * safe — and a patch failure only means falling back to the column-write path.
+   */
+  private fun stampOutputFileDates(options: SaveVideoInput) {
+    val creationMs = options.capturedAtMs?.toLong() ?: return
+    val modificationMs = options.modifiedAtMs?.toLong() ?: creationMs
+    val file = File(options.path.removePrefix("file://"))
+
+    runCatching { Mp4Dates.apply(file, creationMs, modificationMs) }
+      .onSuccess { atoms ->
+        // Zero atoms means the dates rest on the column writes alone — the first thing to check
+        // if a saved copy ever shows the wrong date again.
+        if (atoms == 0) Log.w(TAG, "[save] no MP4 atoms patched; dates rely on column writes")
+        else Log.i(TAG, "[save] stamped $atoms MP4 atoms with the source dates")
+      }
+      .onFailure { Log.w(TAG, "[save] could not stamp MP4 dates", it) }
+  }
+
+  private fun insertPendingRow(options: SaveVideoInput): Uri {
     val values = ContentValues().apply {
       put(MediaStore.MediaColumns.DISPLAY_NAME, options.filename)
       put(MediaStore.MediaColumns.MIME_TYPE, MP4_MIME_TYPE)
       options.folder?.let { put(MediaStore.MediaColumns.RELATIVE_PATH, it) }
-      options.capturedAtMs?.let { put(MediaStore.Video.Media.DATE_TAKEN, it.toLong()) }
-      options.modifiedAtMs?.let {
-        // DATE_MODIFIED is seconds, unlike DATE_TAKEN.
-        put(MediaStore.MediaColumns.DATE_MODIFIED, it.toLong() / 1000)
-      }
+      putDates(options)
       put(MediaStore.MediaColumns.IS_PENDING, 1)
     }
 
-    val uri = resolver.insert(collection, values)
+    val collection = MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+    return resolver.insert(collection, values)
       ?: throw SaveFailedException("The media store refused to create the file.")
+  }
 
+  private fun copyBytesInto(uri: Uri, sourcePath: String) {
     try {
       resolver.openOutputStream(uri)?.use { output ->
-        File(options.path.removePrefix("file://")).inputStream().use { it.copyTo(output) }
+        File(sourcePath.removePrefix("file://")).inputStream().use { it.copyTo(output) }
       } ?: throw SaveFailedException("The media store gave no stream to write to.")
     } catch (error: Exception) {
       // A pending row with no bytes would linger invisibly forever.
       runCatching { resolver.delete(uri, null, null) }
+      Log.w(TAG, "[save] write failed, row deleted", error)
       throw error
     }
-
-    resolver.update(
-      uri,
-      ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) },
-      null,
-      null
-    )
-
-    return uri.toString()
   }
+
+  /** Makes the row visible, re-sending the dates in the same update the scan is triggered by. */
+  private fun publish(uri: Uri, options: SaveVideoInput) {
+    writeValues(
+      uri,
+      ContentValues().apply {
+        put(MediaStore.MediaColumns.IS_PENDING, 0)
+        putDates(options)
+      }
+    )
+  }
+
+  /**
+   * The last word on the dates: whatever the publish scan decided, these are the values §8 promised.
+   *
+   * The file's own timestamp is stamped too — DATE_MODIFIED is derived from it, so a media rescan
+   * that ignores the column still lands on the right answer.
+   */
+  private fun assertDates(uri: Uri, options: SaveVideoInput) {
+    if (options.capturedAtMs == null && options.modifiedAtMs == null) return
+
+    writeValues(uri, ContentValues().apply { putDates(options) })
+    options.modifiedAtMs?.let { stampUnderlyingFile(uri, it.toLong()) }
+  }
+
+  private fun ContentValues.putDates(options: SaveVideoInput) {
+    options.capturedAtMs?.let { put(MediaStore.Video.Media.DATE_TAKEN, it.toLong()) }
+    options.modifiedAtMs?.let {
+      // DATE_MODIFIED is seconds, unlike DATE_TAKEN.
+      put(MediaStore.MediaColumns.DATE_MODIFIED, it.toLong() / 1000)
+    }
+  }
+
+  private fun writeValues(uri: Uri, values: ContentValues): ColumnWrite =
+    runCatching { resolver.update(uri, values, null, null) }
+      .fold(
+        onSuccess = { ColumnWrite(rows = it, error = null) },
+        onFailure = { ColumnWrite(rows = 0, error = it.message ?: it::class.java.simpleName) }
+      )
+
+  private fun describe(options: SaveVideoInput): String =
+    "filename=${options.filename} folder=${options.folder} " +
+      "capturedAt=${asDate(options.capturedAtMs?.toLong())} " +
+      "modifiedAt=${asDate(options.modifiedAtMs?.toLong())}"
+
+  /** What the media store actually holds for a row — the answer to "did the dates stick?". */
+  private fun readColumns(uri: Uri): String {
+    val takenMs = queryLong(uri, MediaStore.Video.Media.DATE_TAKEN)
+    val modifiedSeconds = queryLong(uri, MediaStore.MediaColumns.DATE_MODIFIED)
+    val addedSeconds = queryLong(uri, MediaStore.MediaColumns.DATE_ADDED)
+
+    return "dateTaken=${asDate(takenMs)} " +
+      "dateModified=${asDate(modifiedSeconds?.times(1000))} " +
+      "dateAdded=${asDate(addedSeconds?.times(1000))} " +
+      "relativePath=${queryString(uri, MediaStore.MediaColumns.RELATIVE_PATH)} " +
+      "data=${queryString(uri, MediaStore.MediaColumns.DATA)}"
+  }
+
+  private fun asDate(epochMs: Long?): String =
+    if (epochMs == null || epochMs <= 0) "none"
+    else "${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(epochMs))} ($epochMs)"
 
   // MARK: - Metadata write-back
 
@@ -302,12 +399,10 @@ class MediaToolsModule : Module() {
   private fun writeColumns(uri: Uri, columns: Map<String, Long>): ColumnWrite {
     if (columns.isEmpty()) return ColumnWrite(rows = 0, error = null)
 
-    val values = ContentValues().apply { columns.forEach { (name, value) -> put(name, value) } }
-    return runCatching { context.contentResolver.update(uri, values, null, null) }
-      .fold(
-        onSuccess = { ColumnWrite(rows = it, error = null) },
-        onFailure = { ColumnWrite(rows = 0, error = it.message ?: it::class.java.simpleName) }
-      )
+    return writeValues(
+      uri,
+      ContentValues().apply { columns.forEach { (name, value) -> put(name, value) } }
+    )
   }
 
   private fun stampUnderlyingFile(uri: Uri, modifiedAtMs: Long): Boolean {
@@ -319,12 +414,14 @@ class MediaToolsModule : Module() {
 
   // MARK: - Foreground service
 
-  private fun sendToService(action: String, options: ServiceNotification) {
+  /** Starting is only ever called while the app is on screen, where a service start is allowed. */
+  private fun startService(options: ServiceNotification) {
     val intent = Intent(context, CompressionForegroundService::class.java).apply {
-      this.action = action
+      action = CompressionForegroundService.ACTION_START
       putExtra(CompressionForegroundService.EXTRA_TITLE, options.title)
-      putExtra(CompressionForegroundService.EXTRA_TEXT, options.text)
       putExtra(CompressionForegroundService.EXTRA_PROGRESS, options.progress)
+      putExtra(CompressionForegroundService.EXTRA_ELAPSED, options.elapsed)
+      putExtra(CompressionForegroundService.EXTRA_REMAINING, options.remaining)
     }
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -335,16 +432,36 @@ class MediaToolsModule : Module() {
   }
 
   /**
-   * Every service call goes through a `Unit`-returning function on purpose: `startService` answers
-   * with a `ComponentName`, and an `AsyncFunction` whose body ends in one tries to send that across
-   * the bridge and rejects the whole call.
+   * Progress goes straight to the notification rather than through the service.
+   *
+   * Android 12+ rejects `startForegroundService` from the background — which is exactly where a
+   * compression spends its time — so an intent per update stopped the notification from moving as
+   * soon as the app left the screen. `notify()` on the service's own id has no such restriction and
+   * updates the same notification in place.
+   */
+  private fun updateNotification(options: ServiceNotification) {
+    CompressionNotification.post(
+      context,
+      CompressionStatus(options.title, options.progress, options.elapsed, options.remaining)
+    )
+  }
+
+  /**
+   * Ends the service through the live instance instead of another start intent, which the platform
+   * would refuse from the background — the case where jobs actually finish.
+   *
+   * Every service call returns `Unit` on purpose: `startService` answers with a `ComponentName`,
+   * and an `AsyncFunction` whose body ends in one tries to send that across the bridge and rejects.
    */
   private fun stopService() {
-    context.startService(
-      Intent(context, CompressionForegroundService::class.java).apply {
-        action = CompressionForegroundService.ACTION_STOP
-      }
-    )
+    val service = CompressionForegroundService.running
+    val appContext = context.applicationContext
+
+    Handler(Looper.getMainLooper()).post {
+      service?.finish()
+      // The service may never have started — or already have died — but the notification is ours.
+      CompressionNotification.cancel(appContext)
+    }
   }
 }
 
@@ -366,9 +483,13 @@ class SaveFailedException(message: String) : Exception(message)
 class ServiceNotification : Record {
   @Field val title: String = "Compressing video"
 
-  @Field val text: String = ""
-
   @Field val progress: Int = 0
+
+  /** e.g. "1 min 12 s elapsed". */
+  @Field val elapsed: String = ""
+
+  /** e.g. "2 min 5 s left". */
+  @Field val remaining: String = ""
 }
 
 class AssetMetadataInput : Record {

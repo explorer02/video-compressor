@@ -10,6 +10,7 @@ import {
   deleteAssets,
   saveCarriesMetadata,
   saveToLibrary,
+  type SaveTarget,
 } from '../../core/videoLibrary';
 import { workspace } from '../../core/workspace';
 
@@ -119,9 +120,27 @@ async function saveWithMetadata(
   mode: SaveMode
 ): Promise<AppliedMetadataReport | null> {
   const { source, outputPath } = outcome;
+  const target = saveTargetFor(outcome, mode);
+
+  const savedAssetId = await saveToLibrary(outputPath, target);
+  // One line per save; the native side logs the detail (`adb logcat -s MediaTools`).
+  console.log(`[save] mode=${mode} → ${savedAssetId}`);
+
+  if (mode !== 'original') return null;
+  if (saveCarriesMetadata) {
+    return { applied: ['capturedAt', 'modifiedAt'], skipped: [] };
+  }
+  return applySavedAssetMetadata(savedAssetId, source);
+}
+
+/** Only an "original" save carries the source's dates — a fresh copy is deliberately dated now. */
+function saveTargetFor(
+  { source, outputPath }: CompressionOutcome,
+  mode: SaveMode
+): SaveTarget {
   const keepOriginal = mode === 'original';
 
-  const savedAssetId = await saveToLibrary(outputPath, {
+  return {
     filename: filenameOf(outputPath),
     // Even a fresh-metadata copy belongs beside the original rather than in the camera folder.
     ...(source.folder ? { folder: source.folder } : {}),
@@ -131,13 +150,7 @@ async function saveWithMetadata(
     ...(keepOriginal && source.modifiedAt !== null
       ? { modifiedAtMs: source.modifiedAt }
       : {}),
-  });
-
-  if (!keepOriginal) return null;
-  if (saveCarriesMetadata) {
-    return { applied: ['capturedAt', 'modifiedAt'], skipped: [] };
-  }
-  return applySavedAssetMetadata(savedAssetId, source);
+  };
 }
 
 function filenameOf(path: string): string {

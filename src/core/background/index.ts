@@ -39,9 +39,23 @@ export async function ensureNotificationPermission(): Promise<void> {
   }
 }
 
+/** The time facts the notification lays out around its progress bar. */
+export type ProgressTimes = {
+  /** e.g. "1 min 12 s elapsed". */
+  elapsed: string;
+  /** e.g. "2 min 5 s left". */
+  remaining: string;
+};
+
 export type BackgroundSession = {
-  /** @param progress 0–1. */
-  update: (progress: number, detail: string) => void;
+  /**
+   * Posts the current progress to the notification. Call this from the encoder's own progress
+   * events, not from a timer: Android suspends JS timers while the app is backgrounded, which is
+   * precisely when the notification is the only thing the user can see.
+   *
+   * @param progress 0–1.
+   */
+  update: (progress: number, times: ProgressTimes) => void;
   end: () => void;
 };
 
@@ -51,19 +65,29 @@ export function beginBackgroundSession(title: string): BackgroundSession {
   if (!mediaToolsCapabilities.foregroundService) return INERT_SESSION;
 
   let ended = false;
+  let posted = '';
+
   void MediaTools.startCompressionService({
     title,
-    text: 'Starting…',
     progress: 0,
+    elapsed: '',
+    remaining: 'Starting…',
   }).catch(reportFailure);
 
   return {
-    update: (progress, detail) => {
+    update: (progress, times) => {
       if (ended) return;
+
+      // Repeating a notification the system already shows costs a bridge call and a redraw.
+      const percent = toPercent(progress);
+      const signature = `${percent}:${times.elapsed}:${times.remaining}`;
+      if (signature === posted) return;
+      posted = signature;
+
       void MediaTools.updateCompressionProgress({
         title,
-        text: detail,
-        progress: toPercent(progress),
+        progress: percent,
+        ...times,
       }).catch(reportFailure);
     },
     end: () => {

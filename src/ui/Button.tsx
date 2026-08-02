@@ -11,10 +11,14 @@ import { AppText } from './AppText';
 
 type Variant = 'primary' | 'secondary' | 'danger' | 'ghost';
 
+/** `sm` is for buttons that sit inside a bar rather than owning a row of their own. */
+type Size = 'md' | 'sm';
+
 export type ButtonProps = {
   label: string;
   onPress: () => void;
   variant?: Variant;
+  size?: Size;
   disabled?: boolean;
   busy?: boolean;
   /** Secondary line under the label, e.g. "Original capture date + location". */
@@ -26,6 +30,7 @@ export function Button({
   label,
   onPress,
   variant = 'primary',
+  size = 'md',
   disabled = false,
   busy = false,
   hint,
@@ -33,6 +38,7 @@ export function Button({
 }: ButtonProps) {
   const inert = disabled || busy;
   const palette = palettes[variant];
+  const metrics = sizes[size];
 
   return (
     <Pressable
@@ -42,6 +48,7 @@ export function Button({
       onPress={onPress}
       style={({ pressed }) => [
         styles.base,
+        metrics.container,
         {
           backgroundColor:
             pressed && !inert ? palette.pressed : palette.background,
@@ -52,7 +59,7 @@ export function Button({
       ]}
     >
       <View style={styles.labels}>
-        <AppText variant="bodyStrong" style={{ color: palette.text }}>
+        <AppText variant={metrics.label} style={{ color: palette.text }}>
           {label}
         </AppText>
         {hint ? (
@@ -96,16 +103,36 @@ const palettes: Record<
   },
 };
 
+const sizes: Record<
+  Size,
+  { container: ViewStyle; label: 'bodyStrong' | 'captionStrong' }
+> = {
+  md: {
+    container: {
+      minHeight: 48,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.lg,
+      borderRadius: radius.md,
+    },
+    label: 'bodyStrong',
+  },
+  sm: {
+    container: {
+      minHeight: 36,
+      paddingVertical: spacing.xs,
+      paddingHorizontal: spacing.md,
+      borderRadius: radius.pill,
+    },
+    label: 'captionStrong',
+  },
+};
+
 const styles = StyleSheet.create({
   base: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    minHeight: 48,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.md,
   },
   labels: { alignItems: 'center' },
   hint: { opacity: 0.85, marginTop: 2 },

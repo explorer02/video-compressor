@@ -1,5 +1,5 @@
 import { FlashList } from '@shopify/flash-list';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
 
 import { formatBytes } from '../core/format';
@@ -12,7 +12,15 @@ import { useVideoSelection } from '../features/library/useVideoSelection';
 import { useVideoSizes } from '../features/library/useVideoSizes';
 import { VideoRow } from '../features/library/VideoRow';
 import { colors, spacing } from '../theme';
-import { AppText, Banner, Button, EmptyState, Screen, useToast } from '../ui';
+import {
+  AppText,
+  Banner,
+  Button,
+  EmptyState,
+  Screen,
+  useHardwareBack,
+  useToast,
+} from '../ui';
 
 export type LibraryScreenProps = {
   access: MediaAccessState;
@@ -31,16 +39,43 @@ export function LibraryScreen({ access, onSelect }: LibraryScreenProps) {
   const deletion = useDeleteVideos({
     onDeleted: message => {
       toast.show(message, 'success');
-      selection.clear();
+      selection.exit();
     },
     onKept: message => {
       toast.show(message);
-      selection.clear();
+      selection.exit();
     },
     onFailed: message => toast.show(message, 'danger'),
   });
 
-  const selectedVideos = browser.videos.filter(selection.isSelected);
+  // Hardware back leaves selection mode the way Android galleries do, instead of exiting the app.
+  useHardwareBack(selection.active ? selection.exit : null);
+
+  // "All" means the whole view, not the pages scrolled in so far — hence the count comparison
+  // against the view's total and the async fetch when selecting.
+  const allSelected =
+    browser.totalCount !== null &&
+    browser.totalCount > 0 &&
+    selection.count === browser.totalCount;
+
+  const [selectingAll, setSelectingAll] = useState(false);
+  const toggleSelectAll = useCallback(() => {
+    if (allSelected) {
+      selection.selectNone();
+      return;
+    }
+    setSelectingAll(true);
+    void (async () => {
+      try {
+        selection.selectAll(await browser.listAllInView());
+      } catch (error) {
+        console.warn('[library] failed to select all videos', error);
+        toast.show('Could not select every video.', 'danger');
+      } finally {
+        setSelectingAll(false);
+      }
+    })();
+  }, [allSelected, browser, selection, toast]);
 
   const renderItem = useCallback(
     ({ item }: { item: LibraryVideo }) => (
@@ -49,9 +84,10 @@ export function LibraryScreen({ access, onSelect }: LibraryScreenProps) {
         sortKey={browser.sort.key}
         sizeBytes={sizes.sizeOf(item)}
         selected={selection.active ? selection.isSelected(item) : null}
-        // In selection mode a tap toggles rather than opens, so the two never conflict.
+        // In selection mode a tap toggles rather than opens, so the two never conflict — and a
+        // long press toggles too, so holding a second row never resets the selection to just it.
         onPress={selection.active ? selection.toggle : onSelect}
-        onLongPress={selection.begin}
+        onLongPress={selection.active ? selection.toggle : selection.begin}
       />
     ),
     [browser.sort.key, onSelect, selection, sizes]
@@ -62,14 +98,16 @@ export function LibraryScreen({ access, onSelect }: LibraryScreenProps) {
       {selection.active ? (
         <SelectionBar
           count={selection.count}
+          allSelected={allSelected}
+          selectingAll={selectingAll}
           busy={deletion.busy}
-          onSelectAll={() => selection.selectAll(browser.videos)}
+          onToggleAll={toggleSelectAll}
           onDelete={() =>
-            confirmDelete(selectedVideos.length, () =>
-              deletion.remove(selectedVideos)
+            confirmDelete(selection.count, () =>
+              deletion.remove(selection.videos)
             )
           }
-          onCancel={selection.clear}
+          onDone={selection.exit}
         />
       ) : (
         <View style={styles.header}>
@@ -109,6 +147,8 @@ export function LibraryScreen({ access, onSelect }: LibraryScreenProps) {
         data={browser.videos}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
+        // Selection state lives outside the row data, so rows must be told when it changes.
+        extraData={selection}
         onEndReached={browser.loadMore}
         onEndReachedThreshold={0.6}
         refreshing={browser.refreshing}
@@ -124,35 +164,55 @@ export function LibraryScreen({ access, onSelect }: LibraryScreenProps) {
   );
 }
 
+/**
+ * Replaces the header while selecting: the count where the title was, the actions on one row.
+ * "Delete" carries the count so the destructive button always says how much it will destroy.
+ */
 function SelectionBar({
   count,
+  allSelected,
+  selectingAll,
   busy,
-  onSelectAll,
+  onToggleAll,
   onDelete,
-  onCancel,
+  onDone,
 }: {
   count: number;
+  allSelected: boolean;
+  selectingAll: boolean;
   busy: boolean;
-  onSelectAll: () => void;
+  onToggleAll: () => void;
   onDelete: () => void;
-  onCancel: () => void;
+  onDone: () => void;
 }) {
   return (
     <View style={styles.selectionBar}>
-      <AppText variant="heading">
-        {count === 0 ? 'Select videos' : `${count} selected`}
-      </AppText>
+      <View style={styles.selectionTitle}>
+        <AppText variant="title">
+          {count === 0 ? 'Select' : String(count)}
+        </AppText>
+        <AppText variant="caption" tone="muted">
+          {count === 0 ? 'Tap videos to select them' : 'selected'}
+        </AppText>
+      </View>
 
       <View style={styles.selectionActions}>
-        <Button label="All" variant="ghost" onPress={onSelectAll} />
         <Button
-          label="Delete"
+          label={allSelected ? 'Deselect all' : 'Select all'}
+          variant="secondary"
+          size="sm"
+          busy={selectingAll}
+          onPress={onToggleAll}
+        />
+        <Button
+          label={count > 0 ? `Delete (${count})` : 'Delete'}
           variant="danger"
+          size="sm"
           busy={busy}
           disabled={count === 0}
           onPress={onDelete}
         />
-        <Button label="Cancel" variant="ghost" onPress={onCancel} />
+        <Button label="Done" variant="ghost" size="sm" onPress={onDone} />
       </View>
     </View>
   );
@@ -281,12 +341,24 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
     gap: spacing.sm,
   },
-  selectionActions: { flexDirection: 'row', gap: spacing.sm },
+  selectionTitle: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: spacing.sm,
+    // The title line keeps the header's height so flipping modes never shifts the list below.
+    minHeight: 34,
+  },
+  selectionActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   controls: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
     paddingRight: spacing.lg,
+    paddingBottom: spacing.md,
   },
   placeholder: { paddingVertical: spacing.xxl, alignItems: 'center' },
   footer: { paddingVertical: spacing.lg, alignItems: 'center' },

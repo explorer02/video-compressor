@@ -46,6 +46,8 @@ export type VideoBrowser = {
   setSizeFilter: (filter: SizeFilter) => void;
   loadMore: () => void;
   refresh: () => void;
+  /** Every video in the current view, not just the pages fetched so far. Feeds "Select all". */
+  listAllInView: () => Promise<LibraryVideo[]>;
 };
 
 /** What the library returned, and for which view — the query it answers is part of the value. */
@@ -231,6 +233,15 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
     setReloadToken(token => token + 1);
   }, []);
 
+  const listAllInView = useCallback(async (): Promise<LibraryVideo[]> => {
+    // A scanned view already holds every match in memory; anything else asks the store for all of
+    // it in one read — the same query the pages come from, without the pagination.
+    if (needsFullScan(sort, sizeFilter)) {
+      return current ? scanned.current : scanLibrary(sort, sizeFilter);
+    }
+    return listAllVideos(mediaStoreSort(sort));
+  }, [current, sizeFilter, sort]);
+
   return {
     videos: current?.videos ?? NO_VIDEOS,
     status,
@@ -245,6 +256,7 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
     setSizeFilter,
     loadMore,
     refresh,
+    listAllInView,
   };
 }
 

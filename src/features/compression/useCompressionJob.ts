@@ -94,16 +94,32 @@ export function useCompressionJob({
     void ensureNotificationPermission();
     const background = beginBackgroundSession(`Compressing ${video.filename}`);
 
+    // The screen's own clock. It stops while the app is backgrounded — Android suspends JS timers
+    // with the activity — which is why it does not drive the notification.
     const ticker = setInterval(() => {
       if (!active) return;
       const elapsedMs = Date.now() - startedAt;
-      const etaMs = estimateEta(elapsedMs, progress);
-      setJob({ phase: 'running', progress, elapsedMs, etaMs });
-      background.update(progress, remainingLabel(etaMs));
+      setJob({
+        phase: 'running',
+        progress,
+        elapsedMs,
+        etaMs: estimateEta(elapsedMs, progress),
+      });
     }, TICK_MS);
 
     const run = compressToTier(source, tier, fraction => {
       progress = clampProgress(fraction);
+      // Encoder events keep arriving in the background, so the notification is posted from here
+      // rather than from the ticker above — otherwise it freezes the moment the app leaves screen.
+      // Built inline: this callback outlives hot reloads inside the native module, so it must not
+      // lean on helpers a swapped-out module instance may no longer hold.
+      const elapsedMs = Date.now() - startedAt;
+      const etaMs = estimateEta(elapsedMs, progress);
+      background.update(progress, {
+        elapsed: `${formatDurationWords(elapsedMs)} elapsed`,
+        remaining:
+          etaMs === null ? 'Estimating…' : `${formatDurationWords(etaMs)} left`,
+      });
     });
     cancelRun.current = run.cancel;
     // True once the run reached an outcome (completed, failed, or user-cancelled).
@@ -245,12 +261,6 @@ function logEncodeSpeed(
       `duration=${Math.round(source.durationMs / 1000)}s elapsed=${Math.round(elapsedMs / 1000)}s ` +
       `ratio=${realtimeRatio.toFixed(2)}x realtime (target >= 2x)`
   );
-}
-
-function remainingLabel(etaMs: number | null): string {
-  return etaMs === null
-    ? 'Estimating time remaining…'
-    : `About ${formatDurationWords(etaMs)} left`;
 }
 
 function estimateEta(elapsedMs: number, progress: number): number | null {

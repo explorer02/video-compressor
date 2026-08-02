@@ -16,8 +16,14 @@ export type CompressionRun = {
   cancel: () => void;
 };
 
-/** Progress crosses the bridge every 5% instead of continuously, keeping the JS thread quiet. */
-const PROGRESS_DIVIDER = 5;
+/**
+ * Progress crosses the bridge every 2% instead of continuously, keeping the JS thread quiet.
+ *
+ * These events are also what moves the background notification (§7) — nothing else runs while the
+ * app is off screen — so they have to be frequent enough to read as live, and 50 per job is not a
+ * load worth economising on.
+ */
+const PROGRESS_DIVIDER = 2;
 
 export function compressToTier(
   source: SourceVideo,
