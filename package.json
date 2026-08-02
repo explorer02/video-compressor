@@ -13,18 +13,24 @@
     "expo-status-bar": "~57.0.1",
     "expo-video": "~57.0.2",
     "react": "19.2.3",
+    "react-dom": "19.2.3",
     "react-native": "0.86.2",
     "react-native-compressor": "^2.0.3",
     "react-native-nitro-modules": "^0.36.5",
-    "react-native-safe-area-context": "~5.7.0"
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-web": "^0.21.2"
   },
   "devDependencies": {
+    "@storybook/react-native-web-vite": "^10.5.5",
+    "@types/node": "^26.1.2",
     "@types/react": "~19.2.2",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~57.0.1",
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.9.6",
-    "typescript": "~6.0.3"
+    "storybook": "^10.5.5",
+    "typescript": "~6.0.3",
+    "vite": "^8.2.0"
   },
   "scripts": {
     "start": "expo start --dev-client",
@@ -36,7 +42,9 @@
     "doctor": "npx expo-doctor",
     "lint": "expo lint",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "storybook": "storybook dev -p 6006",
+    "storybook:build": "storybook build"
   },
   "private": true
 }

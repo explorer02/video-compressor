@@ -102,9 +102,7 @@ export function BatchSetupScreen({
 
   const tierSegments = useMemo<Segment<QualityTierId>[]>(
     () =>
-      QUALITY_TIERS.map(candidate =>
-        tierSegment(candidate, videos, factsFor)
-      ),
+      QUALITY_TIERS.map(candidate => tierSegment(candidate, videos, factsFor)),
     [factsFor, videos]
   );
 

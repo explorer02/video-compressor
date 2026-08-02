@@ -136,10 +136,7 @@ function DirectionPill({
       onPress={onPress}
       style={[styles.pill, selected ? styles.pillSelected : null]}
     >
-      <AppText
-        variant="captionStrong"
-        tone={selected ? 'accent' : 'muted'}
-      >
+      <AppText variant="captionStrong" tone={selected ? 'accent' : 'muted'}>
         {label}
       </AppText>
     </Pressable>

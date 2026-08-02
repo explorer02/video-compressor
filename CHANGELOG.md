@@ -6,6 +6,11 @@ which always describes the current state of the product.
 
 ## 2026-08-02
 
+- **Storybook** (dev tooling, no product change): `npm run storybook` renders components in a
+  browser via react-native-web — no device or emulator build needed for UI work. Native-only
+  modules (expo-video, expo-image, expo-media-library, media-tools) are swapped for browser
+  stand-ins in `.storybook/mocks/`; stories live beside their components (`*.stories.tsx`), with a
+  starter set covering `src/ui` plus ProgressBar, TierSelector, SortToolbar, and VideoRow.
 - **Batch compression** (the §11 non-goal is lifted): multi-select gains **Compress (N)**. A setup
   screen picks one tier for the batch, per-video Copy/Replace (with all-copies / all-replace
   shortcuts), metadata choice for copies, and a totals card. The queue encodes one video at a time

@@ -46,7 +46,9 @@ export function BatchCompressingScreen({
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         extraData={job.items}
-        ListHeaderComponent={<BatchHeader job={job} total={plan.items.length} />}
+        ListHeaderComponent={
+          <BatchHeader job={job} total={plan.items.length} />
+        }
       />
 
       <View style={styles.actions}>

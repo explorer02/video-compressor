@@ -4,7 +4,10 @@ import {
   MediaTools,
   mediaToolsCapabilities,
 } from '../../../modules/media-tools';
-import { sourceFactsFrom, type TierSourceFacts } from '../../core/compression/tiers';
+import {
+  sourceFactsFrom,
+  type TierSourceFacts,
+} from '../../core/compression/tiers';
 import { sizeIndex } from '../../core/sizeIndex';
 import type { LibraryVideo, VideoAssetId } from '../../core/videoLibrary';
 

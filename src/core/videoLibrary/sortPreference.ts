@@ -34,10 +34,7 @@ export function readStoredSizeFilter(): SizeFilter {
   if (isSizeFilter(stored)) return stored;
 
   // Builds before the direction existed stored the bare threshold; those were all "at least".
-  if (
-    typeof stored === 'number' &&
-    SIZE_FILTER_THRESHOLDS.includes(stored)
-  ) {
+  if (typeof stored === 'number' && SIZE_FILTER_THRESHOLDS.includes(stored)) {
     return { direction: 'atLeast', bytes: stored };
   }
 

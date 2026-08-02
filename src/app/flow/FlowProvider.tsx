@@ -40,7 +40,9 @@ export function FlowProvider({ children }: { children: ReactNode }) {
         backToLibrary: () => setState(LIBRARY),
 
         startBatchSetup: (videos: LibraryVideo[]) =>
-          setState(videos.length > 0 ? { name: 'batchSetup', videos } : LIBRARY),
+          setState(
+            videos.length > 0 ? { name: 'batchSetup', videos } : LIBRARY
+          ),
 
         startBatch: (plan: BatchPlan) =>
           setState(current =>

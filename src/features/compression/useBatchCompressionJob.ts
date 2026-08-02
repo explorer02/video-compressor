@@ -32,12 +32,7 @@ const TICK_MS = 500;
 const MIN_PROGRESS_FOR_ETA = 0.03;
 
 export type BatchItemPhase =
-  | 'pending'
-  | 'compressing'
-  | 'saving'
-  | 'done'
-  | 'skipped'
-  | 'failed';
+  'pending' | 'compressing' | 'saving' | 'done' | 'skipped' | 'failed';
 
 export type BatchItem = {
   video: LibraryVideo;
@@ -140,7 +135,10 @@ export function useBatchCompressionJob(plan: BatchPlan): BatchJob {
           return;
         }
 
-        if (source.sizeBytes > 0 && estimateOutputBytes(tier, source) !== null) {
+        if (
+          source.sizeBytes > 0 &&
+          estimateOutputBytes(tier, source) !== null
+        ) {
           if (!workspace.hasRoomFor(estimateOutputBytes(tier, source))) {
             patchItem(index, {
               phase: 'failed',
@@ -211,7 +209,9 @@ export function useBatchCompressionJob(plan: BatchPlan): BatchJob {
       // the copies stay, and the items report their originals as kept.
       const replacements = itemsRef.current
         .map((item, index) => ({ item, index }))
-        .filter(({ item }) => item.action === 'replace' && item.phase === 'done');
+        .filter(
+          ({ item }) => item.action === 'replace' && item.phase === 'done'
+        );
 
       if (!cancelledRef.current && replacements.length > 0) {
         if (active) setPhase('replacing');
@@ -221,7 +221,9 @@ export function useBatchCompressionJob(plan: BatchPlan): BatchJob {
           console.warn('[batch] delete request failed', error);
         }
         for (const { item, index } of replacements) {
-          patchItem(index, { replaced: !(await originalSurvived(item.video.id)) });
+          patchItem(index, {
+            replaced: !(await originalSurvived(item.video.id)),
+          });
         }
       }
 

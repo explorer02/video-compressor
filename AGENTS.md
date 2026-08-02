@@ -25,9 +25,19 @@ npm run prebuild     # regenerate ios/ + android/ from app.json
 npm run typecheck    # tsc --noEmit
 npm run lint         # eslint (expo config)
 npm run format       # prettier --write .
+npm run storybook    # component workbench in the browser — no device build needed
 ```
 
 Run `typecheck`, `lint`, and `format` before finishing a change.
+
+## Storybook
+
+`npm run storybook` serves the UI components at http://localhost:6006 via react-native-web — use
+it to build and check UI without a device or emulator. Stories are colocated (`*.stories.tsx`).
+Native-only modules are swapped for browser stand-ins in `.storybook/mocks/` (wired up in
+[.storybook/main.ts](.storybook/main.ts)); if a component pulls in a new native module, add a mock
+there mirroring only the surface `src/` uses. Screens and hooks that drive real compression or the
+media store stay device-only.
 
 Add dependencies with `npx expo install <pkg>`. Native config belongs in [app.json](app.json) via
 config plugins, not in the generated `ios/` and `android/` folders.
