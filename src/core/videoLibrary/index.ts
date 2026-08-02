@@ -19,17 +19,24 @@ export { useMediaAccess, type MediaAccessState } from './permissions';
 
 export {
   nextSort,
+  readStoredDurationFilter,
   readStoredSizeFilter,
   readStoredSort,
+  storeDurationFilter,
   storeSizeFilter,
   storeSort,
 } from './sortPreference';
 
 export {
   DEFAULT_SORT,
+  DURATION_FILTER_THRESHOLDS,
+  matchesDurationFilter,
   matchesSizeFilter,
+  sameDurationFilter,
   sameSizeFilter,
   SIZE_FILTER_THRESHOLDS,
+  type DurationFilter,
+  type FilterDirection,
   type SizeFilter,
   type SizeFilterDirection,
   type LibraryVideo,

@@ -17,13 +17,14 @@ export type CompressionRun = {
 };
 
 /**
- * Progress crosses the bridge every 2% instead of continuously, keeping the JS thread quiet.
+ * Progress crosses the bridge on every native event (§3.3 shows tenth-of-a-percent steps, so 2%
+ * blocks read as stalling). The encoder reports per chunk, not per frame, so the resulting event
+ * rate is well within what the JS thread absorbs without jank.
  *
  * These events are also what moves the background notification (§7) — nothing else runs while the
- * app is off screen — so they have to be frequent enough to read as live, and 50 per job is not a
- * load worth economising on.
+ * app is off screen.
  */
-const PROGRESS_DIVIDER = 2;
+const PROGRESS_DIVIDER = 0;
 
 export function compressToTier(
   source: SourceVideo,

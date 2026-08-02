@@ -6,6 +6,22 @@ which always describes the current state of the product.
 
 ## 2026-08-02
 
+- **Smooth progress** (§3.3): the compressing screens show tenths of a percent ("62.4%") and the
+  bar fills in 0.1% steps. Encoder progress now crosses the bridge on every native event (was
+  every 2%) and the single-job screen updates on the event itself instead of a 500 ms sample. The
+  Android notification still posts whole percents — the shade rate-limits `notify()` calls.
+- **Library controls on two rows** (§4): the sort toolbar and the filter chips no longer share a
+  row — five controls truncated every label ("File …", "Date…").
+- **Notification fixes** (§7): the collapsed state uses a compact layout (filename, "62% ·
+  55 s left", slim bar) sized to the collapsed shade instead of clipping the full layout mid-row;
+  the expanded state shows one progress bar, not two — the template's bar was drawn beside the
+  custom layout's and is no longer set.
+- **Length filter** (§4): a second chip beside the size filter keeps videos at least / under
+  5 / 10 / 15 / 20 / 30 s, 1 min, or 5 min — defaulting to "under", for finding the shorts. It
+  composes with the size filter, persists across launches, needs no index (duration comes with
+  every media-store row) and so works on every platform; unknown-duration videos are excluded
+  from filtered views. The size filter's chip-and-sheet UI moved into a shared
+  `ThresholdFilterControl`; both filters are now thin unit adapters over it.
 - **Storybook** (dev tooling, no product change): `npm run storybook` renders components in a
   browser via react-native-web — no device or emulator build needed for UI work. Native-only
   modules (expo-video, expo-image, expo-media-library, media-tools) are swapped for browser

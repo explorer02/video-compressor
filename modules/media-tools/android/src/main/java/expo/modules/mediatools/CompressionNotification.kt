@@ -31,7 +31,10 @@ internal data class CompressionStatus(
  * and it updates the very same notification in place.
  *
  * The body is a custom layout: percent on the left, time remaining on the right, elapsed time
- * under the bar — an arrangement the stock template cannot produce.
+ * under the bar — an arrangement the stock template cannot produce. The collapsed shade gets a
+ * shorter variant of the same layout (it clips anything taller mid-row), and the template's own
+ * progress bar is never set — the decorated style would draw it *next to* the custom layout's
+ * bar, showing two bars for one job.
  */
 internal object CompressionNotification {
   const val ID = 4711
@@ -50,9 +53,8 @@ internal object CompressionNotification {
       .setOngoing(true)
       .setOnlyAlertOnce(true)
       .setPriority(NotificationCompat.PRIORITY_LOW)
-      .setProgress(100, status.percent.coerceIn(0, 100), false)
       .setStyle(NotificationCompat.DecoratedCustomViewStyle())
-      .setCustomContentView(statusView(context, status))
+      .setCustomContentView(compactStatusView(context, status))
       .setCustomBigContentView(statusView(context, status))
 
     // §7: tapping the notification reopens the app, which is still in the Compressing state.
@@ -77,6 +79,16 @@ internal object CompressionNotification {
       setTextViewText(R.id.notification_remaining, status.remaining)
       setTextViewText(R.id.notification_elapsed, status.elapsed)
       setProgressBar(R.id.notification_progress, 100, status.percent.coerceIn(0, 100), false)
+    }
+
+  private fun compactStatusView(context: Context, status: CompressionStatus): RemoteViews =
+    RemoteViews(context.packageName, R.layout.notification_compression_compact).apply {
+      setTextViewText(R.id.notification_compact_title, status.title)
+      setTextViewText(
+        R.id.notification_compact_status,
+        "${status.percent.coerceIn(0, 100)}% · ${status.remaining}"
+      )
+      setProgressBar(R.id.notification_compact_progress, 100, status.percent.coerceIn(0, 100), false)
     }
 
   private fun launchIntent(context: Context): PendingIntent? {

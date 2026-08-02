@@ -1,19 +1,22 @@
 import { openJsonStore } from '../storage';
 import {
   DEFAULT_SORT,
+  DURATION_FILTER_THRESHOLDS,
   SIZE_FILTER_THRESHOLDS,
+  type DurationFilter,
+  type FilterDirection,
   type SizeFilter,
-  type SizeFilterDirection,
   type SortDirection,
   type VideoSort,
   type VideoSortKey,
 } from './types';
 
-/** The browser's sort and size filter survive relaunches (§4). */
+/** The browser's sort and filters survive relaunches (§4). */
 
 const STORE = 'preferences';
 const KEY = 'videoSort';
 const SIZE_FILTER_KEY = 'sizeFilter';
+const DURATION_FILTER_KEY = 'durationFilter';
 
 const SORT_KEYS: VideoSortKey[] = ['size', 'createdAt', 'modifiedAt'];
 const DIRECTIONS: SortDirection[] = ['asc', 'desc'];
@@ -27,7 +30,7 @@ export function storeSort(sort: VideoSort): void {
   openJsonStore(STORE).set(KEY, sort);
 }
 
-const FILTER_DIRECTIONS: SizeFilterDirection[] = ['atLeast', 'under'];
+const FILTER_DIRECTIONS: FilterDirection[] = ['atLeast', 'under'];
 
 export function readStoredSizeFilter(): SizeFilter {
   const stored = openJsonStore(STORE).get<unknown>(SIZE_FILTER_KEY);
@@ -46,6 +49,15 @@ export function storeSizeFilter(filter: SizeFilter): void {
   openJsonStore(STORE).set(SIZE_FILTER_KEY, filter);
 }
 
+export function readStoredDurationFilter(): DurationFilter {
+  const stored = openJsonStore(STORE).get<unknown>(DURATION_FILTER_KEY);
+  return isDurationFilter(stored) ? stored : null;
+}
+
+export function storeDurationFilter(filter: DurationFilter): void {
+  openJsonStore(STORE).set(DURATION_FILTER_KEY, filter);
+}
+
 /** Tapping the active sort reverses it; tapping another switches to it, newest/largest first. */
 export function nextSort(current: VideoSort, key: VideoSortKey): VideoSort {
   if (current.key !== key) return { key, direction: 'desc' };
@@ -59,8 +71,19 @@ function isSizeFilter(value: unknown): value is NonNullable<SizeFilter> {
   if (typeof value !== 'object' || value === null) return false;
   const candidate = value as Partial<NonNullable<SizeFilter>>;
   return (
-    FILTER_DIRECTIONS.includes(candidate.direction as SizeFilterDirection) &&
+    FILTER_DIRECTIONS.includes(candidate.direction as FilterDirection) &&
     SIZE_FILTER_THRESHOLDS.includes(candidate.bytes as number)
+  );
+}
+
+function isDurationFilter(
+  value: unknown
+): value is NonNullable<DurationFilter> {
+  if (typeof value !== 'object' || value === null) return false;
+  const candidate = value as Partial<NonNullable<DurationFilter>>;
+  return (
+    FILTER_DIRECTIONS.includes(candidate.direction as FilterDirection) &&
+    DURATION_FILTER_THRESHOLDS.includes(candidate.ms as number)
   );
 }
 

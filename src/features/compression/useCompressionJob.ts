@@ -89,8 +89,9 @@ export function useCompressionJob({
     void ensureNotificationPermission();
     const background = beginBackgroundSession(`Compressing ${video.filename}`);
 
-    // The screen's own clock. It stops while the app is backgrounded — Android suspends JS timers
-    // with the activity — which is why it does not drive the notification.
+    // The screen's own clock, so elapsed time keeps counting between encoder events. It stops
+    // while the app is backgrounded — Android suspends JS timers with the activity — which is why
+    // it does not drive the notification.
     const ticker = setInterval(() => {
       if (!active) return;
       const elapsedMs = Date.now() - startedAt;
@@ -104,12 +105,17 @@ export function useCompressionJob({
 
     const run = runCompressionJob(video, source, tierId, fraction => {
       progress = clampProgress(fraction);
+      const elapsedMs = Date.now() - startedAt;
+      const etaMs = estimateEta(elapsedMs, progress);
+
+      // The screen updates on the event itself, not the next tick — §3.3 shows tenths of a
+      // percent, and a 500 ms sample of those reads as stuttering.
+      if (active) setJob({ phase: 'running', progress, elapsedMs, etaMs });
+
       // Encoder events keep arriving in the background, so the notification is posted from here
       // rather than from the ticker above — otherwise it freezes the moment the app leaves screen.
       // Built inline: this callback outlives hot reloads inside the native module, so it must not
       // lean on helpers a swapped-out module instance may no longer hold.
-      const elapsedMs = Date.now() - startedAt;
-      const etaMs = estimateEta(elapsedMs, progress);
       background.update(progress, {
         elapsed: `${formatDurationWords(elapsedMs)} elapsed`,
         remaining:

@@ -90,6 +90,12 @@ export function formatResolution(
 }
 
 /** Whole-percent saving, e.g. "86% smaller". Negative savings return null. */
+/** Progress percent in tenths, e.g. "62.4%" — whole-percent steps read as stalled mid-encode. */
+export function formatProgressPercent(fraction: number): string {
+  const clamped = Math.min(Math.max(fraction, 0), 1);
+  return `${(clamped * 100).toFixed(1)}%`;
+}
+
 export function formatSavingPercent(
   originalBytes: number,
   compressedBytes: number

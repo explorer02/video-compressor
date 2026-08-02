@@ -5,6 +5,10 @@ import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
 import { formatBytes } from '../core/format';
 import type { LibraryVideo, MediaAccessState } from '../core/videoLibrary';
 import {
+  DurationFilterControl,
+  durationFilterLabel,
+} from '../features/library/DurationFilterControl';
+import {
   SizeFilterControl,
   sizeFilterLabel,
 } from '../features/library/SizeFilterControl';
@@ -140,11 +144,17 @@ export function LibraryScreen({
           sizeSortAvailable={browser.sizeSortAvailable}
           onToggle={browser.toggleSort}
         />
-        <SizeFilterControl
-          value={browser.sizeFilter}
-          disabled={!browser.sizeSortAvailable}
-          onChange={browser.setSizeFilter}
-        />
+        <View style={styles.filters}>
+          <SizeFilterControl
+            value={browser.sizeFilter}
+            disabled={!browser.sizeSortAvailable}
+            onChange={browser.setSizeFilter}
+          />
+          <DurationFilterControl
+            value={browser.durationFilter}
+            onChange={browser.setDurationFilter}
+          />
+        </View>
       </View>
 
       {access.access === 'limited' ? (
@@ -266,17 +276,18 @@ function LibraryPlaceholder({
   }
 
   // A filter hiding everything is not an empty library, and saying so avoids a pointless hunt.
-  if (browser.sizeFilter !== null) {
-    const under = browser.sizeFilter.direction === 'under';
+  const filters = activeFilterLabels(browser);
+  if (filters.length > 0) {
     return (
       <EmptyState
-        title={under ? 'No videos this small' : 'No videos this large'}
-        message={`Nothing in your library is ${
-          under ? 'under' : ''
-        } ${formatBytes(browser.sizeFilter.bytes)}${under ? '' : ' or bigger'}.`}
+        title="No videos match"
+        message={`Nothing in your library is ${filters.join(' and ')}.`}
         action={{
-          label: 'Clear filter',
-          onPress: () => browser.setSizeFilter(null),
+          label: filters.length > 1 ? 'Clear filters' : 'Clear filter',
+          onPress: () => {
+            browser.setSizeFilter(null);
+            browser.setDurationFilter(null);
+          },
         }}
       />
     );
@@ -333,20 +344,35 @@ function headerSubtitle(
   browser: ReturnType<typeof useVideoBrowser>,
   sizes: ReturnType<typeof useVideoSizes>
 ): string {
-  const { totalCount, libraryCount, sizeFilter, videos } = browser;
+  const { totalCount, libraryCount, videos } = browser;
 
   if (totalCount === null) {
     return videos.length > 0 ? `${videos.length}+ videos` : 'Loading…';
   }
 
-  if (sizeFilter !== null && libraryCount !== null) {
-    return `${totalCount} of ${libraryCount} videos · ${sizeFilterLabel(sizeFilter)}`;
+  const filters = activeFilterLabels(browser);
+  if (filters.length > 0 && libraryCount !== null) {
+    return `${totalCount} of ${libraryCount} videos · ${filters.join(' · ')}`;
   }
 
   const count = `${totalCount} ${plural(totalCount, 'video')}`;
   return sizes.totalBytes === null
     ? count
     : `${count} · ${formatBytes(sizes.totalBytes)}`;
+}
+
+/** The active filters, worded exactly as their chips are. */
+function activeFilterLabels(
+  browser: ReturnType<typeof useVideoBrowser>
+): string[] {
+  const labels: string[] = [];
+  if (browser.sizeFilter !== null) {
+    labels.push(sizeFilterLabel(browser.sizeFilter));
+  }
+  if (browser.durationFilter !== null) {
+    labels.push(durationFilterLabel(browser.durationFilter));
+  }
+  return labels;
 }
 
 function plural(count: number, word: string): string {
@@ -378,12 +404,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
+  // Sort options and filter chips each get a full row — three sort labels plus two chips never
+  // fit one row without truncating into "File …" / "Date…".
   controls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingRight: spacing.lg,
+    gap: spacing.sm,
     paddingBottom: spacing.md,
+  },
+  filters: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
   },
   placeholder: { paddingVertical: spacing.xxl, alignItems: 'center' },
   footer: { paddingVertical: spacing.lg, alignItems: 'center' },

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Collapsed form of the §7 progress notification: one text row (filename left, "62% · 55 s left"
+     right) over a slim bar. The collapsed shade gives a custom view very little height, so anything
+     taller — the expanded layout, for instance — gets clipped mid-row. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="match_parent"
+  android:layout_height="wrap_content"
+  android:orientation="vertical"
+  android:paddingTop="2dp"
+  android:paddingBottom="2dp">
+
+  <RelativeLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <TextView
+      android:id="@+id/notification_compact_status"
+      style="@style/TextAppearance.Compat.Notification"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:layout_alignParentEnd="true" />
+
+    <TextView
+      android:id="@+id/notification_compact_title"
+      style="@style/TextAppearance.Compat.Notification.Title"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:layout_alignParentStart="true"
+      android:layout_toStartOf="@id/notification_compact_status"
+      android:layout_marginEnd="8dp"
+      android:singleLine="true"
+      android:ellipsize="middle" />
+  </RelativeLayout>
+
+  <ProgressBar
+    android:id="@+id/notification_compact_progress"
+    style="@android:style/Widget.Material.ProgressBar.Horizontal"
+    android:layout_width="match_parent"
+    android:layout_height="6dp"
+    android:layout_marginTop="4dp"
+    android:progressTint="#0A66FF" />
+</LinearLayout>

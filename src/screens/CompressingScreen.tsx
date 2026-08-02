@@ -6,7 +6,7 @@ import type {
   SourceVideo,
 } from '../core/compression/types';
 import { tierById } from '../core/compression/tiers';
-import { formatDurationWords } from '../core/format';
+import { formatDurationWords, formatProgressPercent } from '../core/format';
 import type { LibraryVideo } from '../core/videoLibrary';
 import { ProgressBar } from '../features/compression/ProgressBar';
 import { useCompressionJob } from '../features/compression/useCompressionJob';
@@ -52,7 +52,9 @@ export function CompressingScreen({
 
         {job.phase === 'running' ? (
           <View style={styles.progress}>
-            <AppText variant="title">{`${Math.round(job.progress * 100)}%`}</AppText>
+            <AppText variant="title">
+              {formatProgressPercent(job.progress)}
+            </AppText>
             <ProgressBar fraction={job.progress} />
             <AppText variant="caption" tone="muted">
               {`Compressing to ${tierById(tier).label} · ${formatDurationWords(job.elapsedMs)} elapsed`}

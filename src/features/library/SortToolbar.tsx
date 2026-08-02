@@ -63,9 +63,6 @@ export function SortToolbar({
 
 const styles = StyleSheet.create({
   bar: {
-    // Shares a row with the size-filter pill; without flex it keeps its full measured width and
-    // pushes the pill off-screen (RN views don't shrink by default).
-    flex: 1,
     flexDirection: 'row',
     gap: spacing.xs,
     paddingHorizontal: spacing.lg,

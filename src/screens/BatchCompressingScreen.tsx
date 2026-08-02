@@ -3,7 +3,11 @@ import { useCallback } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import type { BatchPlan } from '../app/flow/types';
-import { formatBytes, formatDurationWords } from '../core/format';
+import {
+  formatBytes,
+  formatDurationWords,
+  formatProgressPercent,
+} from '../core/format';
 import { ProgressBar } from '../features/compression/ProgressBar';
 import {
   useBatchCompressionJob,
@@ -106,7 +110,7 @@ function BatchHeader({ job, total }: { job: BatchJob; total: number }) {
 
       <View style={styles.progress}>
         <AppText variant="title">
-          {`${Math.round(job.overallProgress * 100)}%`}
+          {formatProgressPercent(job.overallProgress)}
         </AppText>
         <ProgressBar fraction={job.overallProgress} />
         <AppText variant="caption" tone="muted">

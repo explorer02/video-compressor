@@ -6,14 +6,19 @@ import {
   listAllVideoIds,
   listAllVideos,
   listVideos,
+  matchesDurationFilter,
   matchesSizeFilter,
   nextSort,
+  readStoredDurationFilter,
   readStoredSizeFilter,
   readStoredSort,
+  sameDurationFilter,
   sameSizeFilter,
+  storeDurationFilter,
   storeSizeFilter,
   storeSort,
   subscribeToLibraryChanges,
+  type DurationFilter,
   type LibraryVideo,
   type MediaStoreSortKey,
   type SizeFilter,
@@ -42,10 +47,12 @@ export type VideoBrowser = {
   libraryCount: number | null;
   sort: VideoSort;
   sizeFilter: SizeFilter;
+  durationFilter: DurationFilter;
   /** False until the size index lands; the toolbar disables both size options. */
   sizeSortAvailable: boolean;
   toggleSort: (key: VideoSortKey) => void;
   setSizeFilter: (filter: SizeFilter) => void;
+  setDurationFilter: (filter: DurationFilter) => void;
   loadMore: () => void;
   refresh: () => void;
   /** Every video in the current view, not just the pages fetched so far. Feeds "Select all". */
@@ -56,6 +63,7 @@ export type VideoBrowser = {
 type LoadedPages = {
   sort: VideoSort;
   sizeFilter: SizeFilter;
+  durationFilter: DurationFilter;
   videos: LibraryVideo[];
   hasMore: boolean;
 };
@@ -66,6 +74,9 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
   );
   const [sizeFilter, setStoredSizeFilter] = useState<SizeFilter>(() =>
     sizeIndex.available ? readStoredSizeFilter() : null
+  );
+  const [durationFilter, setStoredDurationFilter] = useState<DurationFilter>(
+    readStoredDurationFilter
   );
   const [loaded, setLoaded] = useState<LoadedPages | null>(null);
   const [failed, setFailed] = useState(false);
@@ -83,7 +94,9 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
 
   // Loading is derived, not stored: a result belonging to a different query *is* the loading state.
   const current =
-    loaded && matchesView(loaded, sort, sizeFilter) ? loaded : null;
+    loaded && matchesView(loaded, sort, sizeFilter, durationFilter)
+      ? loaded
+      : null;
   const status: BrowserStatus = failed
     ? 'error'
     : current
@@ -99,8 +112,8 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
 
     void (async () => {
       try {
-        if (needsFullScan(sort, sizeFilter)) {
-          const matching = await scanLibrary(sort, sizeFilter);
+        if (needsFullScan(sort, sizeFilter, durationFilter)) {
+          const matching = await scanLibrary(sort, sizeFilter, durationFilter);
           if (!active) return;
 
           scanned.current = matching;
@@ -108,6 +121,7 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
           setLoaded({
             sort,
             sizeFilter,
+            durationFilter,
             videos: matching.slice(0, PAGE_SIZE),
             hasMore: matching.length > PAGE_SIZE,
           });
@@ -125,6 +139,7 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
         setLoaded({
           sort,
           sizeFilter,
+          durationFilter,
           videos: page.videos,
           hasMore: page.hasMore,
         });
@@ -143,7 +158,9 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
         const ids = await listAllVideoIds();
         if (!active || request !== generation.current) return;
         setLibraryCount(ids.length);
-        if (sizeFilter === null) setTotalCount(ids.length);
+        if (sizeFilter === null && durationFilter === null) {
+          setTotalCount(ids.length);
+        }
       } catch (error) {
         console.warn('[library] failed to count videos', error);
       }
@@ -152,7 +169,7 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
     return () => {
       active = false;
     };
-  }, [enabled, reloadToken, sizeFilter, sort]);
+  }, [durationFilter, enabled, reloadToken, sizeFilter, sort]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -176,11 +193,12 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
     if (!enabled || loadingMore.current || !current?.hasMore) return;
 
     // A scanned view is already resolved in memory; paging it is a slice, not another query.
-    if (needsFullScan(sort, sizeFilter)) {
+    if (needsFullScan(sort, sizeFilter, durationFilter)) {
       const next = scanned.current.slice(0, current.videos.length + PAGE_SIZE);
       setLoaded({
         sort,
         sizeFilter,
+        durationFilter,
         videos: next,
         hasMore: scanned.current.length > next.length,
       });
@@ -200,7 +218,7 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
         if (request !== generation.current) return;
 
         setLoaded(previous =>
-          previous && matchesView(previous, sort, sizeFilter)
+          previous && matchesView(previous, sort, sizeFilter, durationFilter)
             ? {
                 ...previous,
                 // Offset paging can repeat a row if the library changed mid-scroll.
@@ -215,7 +233,7 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
         loadingMore.current = false;
       }
     })();
-  }, [current, enabled, sizeFilter, sort]);
+  }, [current, durationFilter, enabled, sizeFilter, sort]);
 
   const toggleSort = useCallback((key: VideoSortKey) => {
     setSort(previous => {
@@ -230,6 +248,11 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
     setStoredSizeFilter(filter);
   }, []);
 
+  const setDurationFilter = useCallback((filter: DurationFilter) => {
+    storeDurationFilter(filter);
+    setStoredDurationFilter(filter);
+  }, []);
+
   const refresh = useCallback(() => {
     setRefreshing(true);
     setReloadToken(token => token + 1);
@@ -238,11 +261,13 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
   const listAllInView = useCallback(async (): Promise<LibraryVideo[]> => {
     // A scanned view already holds every match in memory; anything else asks the store for all of
     // it in one read — the same query the pages come from, without the pagination.
-    if (needsFullScan(sort, sizeFilter)) {
-      return current ? scanned.current : scanLibrary(sort, sizeFilter);
+    if (needsFullScan(sort, sizeFilter, durationFilter)) {
+      return current
+        ? scanned.current
+        : scanLibrary(sort, sizeFilter, durationFilter);
     }
     return listAllVideos(mediaStoreSort(sort));
-  }, [current, sizeFilter, sort]);
+  }, [current, durationFilter, sizeFilter, sort]);
 
   return {
     videos: current?.videos ?? NO_VIDEOS,
@@ -253,9 +278,11 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
     libraryCount,
     sort,
     sizeFilter,
+    durationFilter,
     sizeSortAvailable: sizeIndex.available,
     toggleSort,
     setSizeFilter,
+    setDurationFilter,
     loadMore,
     refresh,
     listAllInView,
@@ -274,30 +301,48 @@ function resolveSort(stored: VideoSort): VideoSort {
 }
 
 /**
- * Both sorting and filtering by size need every size known, which the media store cannot answer —
- * so they share one path: read the whole library, index it, then rank and page in memory.
+ * Sorting or filtering by size needs every size known, and filtering by duration needs every row
+ * seen before any page can claim to be complete — the media store can answer neither. All three
+ * share one path: read the whole library, then filter, rank and page in memory.
  */
-function needsFullScan(sort: VideoSort, sizeFilter: SizeFilter): boolean {
+function needsFullScan(
+  sort: VideoSort,
+  sizeFilter: SizeFilter,
+  durationFilter: DurationFilter
+): boolean {
+  if (durationFilter !== null) return true;
   if (!sizeIndex.available) return false;
   return sort.key === 'size' || sizeFilter !== null;
 }
 
 async function scanLibrary(
   sort: VideoSort,
-  sizeFilter: SizeFilter
+  sizeFilter: SizeFilter,
+  durationFilter: DurationFilter
 ): Promise<LibraryVideo[]> {
   const all = await listAllVideos(mediaStoreSort(sort));
-  await sizeIndex.ensure(all);
 
-  // A video whose size is unknown is left out of a filtered view rather than counted as 0 bytes —
-  // an "under 10 MB" list must not claim files nobody has measured.
-  const matching =
-    sizeFilter === null
-      ? all
-      : all.filter(video => {
-          const sizeBytes = sizeIndex.get(video);
-          return sizeBytes !== null && matchesSizeFilter(sizeBytes, sizeFilter);
-        });
+  // Duration rides along in every media-store row; only size needs the index resolved.
+  const needsSizes =
+    sizeIndex.available && (sort.key === 'size' || sizeFilter !== null);
+  if (needsSizes) await sizeIndex.ensure(all);
+
+  // A video whose size or duration is unknown is left out of a filtered view rather than counted
+  // as 0 — an "under 10 MB" or "under 30 s" list must not claim files nobody has measured.
+  let matching = all;
+  if (durationFilter !== null) {
+    matching = matching.filter(
+      video =>
+        video.durationMs !== null &&
+        matchesDurationFilter(video.durationMs, durationFilter)
+    );
+  }
+  if (sizeFilter !== null) {
+    matching = matching.filter(video => {
+      const sizeBytes = sizeIndex.get(video);
+      return sizeBytes !== null && matchesSizeFilter(sizeBytes, sizeFilter);
+    });
+  }
 
   return sort.key === 'size' ? rankBySize(matching, sort.direction) : matching;
 }
@@ -331,12 +376,14 @@ function mediaStoreSort(sort: VideoSort): {
 function matchesView(
   loaded: LoadedPages,
   sort: VideoSort,
-  sizeFilter: SizeFilter
+  sizeFilter: SizeFilter,
+  durationFilter: DurationFilter
 ): boolean {
   return (
     loaded.sort.key === sort.key &&
     loaded.sort.direction === sort.direction &&
-    sameSizeFilter(loaded.sizeFilter, sizeFilter)
+    sameSizeFilter(loaded.sizeFilter, sizeFilter) &&
+    sameDurationFilter(loaded.durationFilter, durationFilter)
   );
 }
 

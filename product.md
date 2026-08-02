@@ -44,7 +44,8 @@ No backend — everything on-device.
      Each tier shows its **estimated output size** (see §6), e.g. "HD · 720p · ~14 MB".
      Tiers below the source's resolution are hidden; tiers that can't shrink the file are disabled
      with a reason; if none can help, "Already optimized".
-3. **Compressing:** determinate progress % + elapsed + rough ETA, Cancel button
+3. **Compressing:** determinate progress in 0.1% steps (percent readout and bar update on every
+   encoder event, so the display creeps rather than jumps) + elapsed + rough ETA, Cancel button
    (`Video.cancelCompression`), screen kept awake; continues in background per §7 (Android shows a
    live progress notification). Hardware back cancels, same as the Cancel button; leaving the
    screen by any route stops the encoder and closes the job record.
@@ -72,8 +73,8 @@ No backend — everything on-device.
 - **Row contents:** thumbnail with duration badge, filename, file size, and the date relevant to the
   active sort (created or modified).
 - **Header:** total video count and, once the size index is complete, the library's total size.
-  With a size filter active it reads "12 of 240 videos" so a filtered list is never mistaken for a
-  small library.
+  With a filter active it reads "12 of 240 videos" plus the filter chips' wording, so a filtered
+  list is never mistaken for a small library.
 - **Sorting:** toolbar with three options — **File size**, **Date created**, **Date modified**.
   Tapping the active option toggles ascending/descending. Default: Date created, newest first.
   Persist the last-used sort across launches.
@@ -83,9 +84,16 @@ No backend — everything on-device.
   - **Android:** sizes come from batched media-store reads via `media-tools`.
   - **iOS:** file size is NOT a native sort key — the same lazy, persistent index applies once the
     native size reader is implemented; size sort/filter are disabled until then.
-- **Size filter:** any size, or ≥ 1 / 2 / 5 / 10 / 20 / 50 / 100 / 500 MB — hides everything
-  smaller, for finding the videos worth acting on. Persists across launches; disabled on platforms
-  with no size reader.
+- **Size filter:** any size, or at least / under 1 / 2 / 5 / 10 / 20 / 50 / 100 / 500 MB — at
+  least, for finding the videos worth acting on; under, for what already fits somewhere. Persists
+  across launches; disabled on platforms with no size reader. Videos with unknown size are
+  excluded from filtered views rather than counted as 0 bytes.
+- **Length filter:** any length, or at least / under 5 / 10 / 15 / 20 / 30 s, 1 min, 5 min — the
+  same chip-and-sheet control as the size filter, defaulting to "under" for finding the shorts.
+  Duration comes straight from the media store, so it needs no index and works on every platform;
+  both filters compose (e.g. ≥ 50 MB and < 30 s). Persists across launches; videos with unknown
+  duration are excluded from filtered views. The two filter chips share a row of their own below
+  the sort toolbar — five controls on one row truncated every label.
 - **Selection mode (batch management):** long-press enters selection; the checkmark overlays the
   thumbnail (no row reflow), tapping toggles rows, long-pressing another row toggles it too. A
   constant-height selection bar replaces the header: **Select all ⁄ Deselect all**, **Delete (n)**,
@@ -133,10 +141,13 @@ No backend — everything on-device.
   runs at background priority and never blocks the UI.
 - **Background behavior:**
   - **Android:** compression runs under a **foreground service** (via `media-tools`) with a live
-    progress notification — custom layout: filename, percent left / time remaining right, progress
-    bar, elapsed below, with a stock-template fallback for accessibility. Updates ride the
-    encoder's own progress events and are posted via `notify()`, so they keep flowing while the
-    app is backgrounded. Tapping the notification reopens the app in the Compressing state.
+    progress notification. Collapsed: a compact custom layout — filename left, "62% · 55 s left"
+    right, slim bar below — sized to the collapsed shade so nothing clips. Expanded: the full
+    layout adds elapsed time under the bar. Exactly one progress bar in either state (the
+    template's own bar is never set — it would draw beside the custom one); template title/text
+    back the layout for accessibility surfaces. Updates ride the encoder's own progress events and
+    are posted via `notify()`, so they keep flowing while the app is backgrounded. Tapping the
+    notification reopens the app in the Compressing state.
   - **iOS:** wrap the job with `activateBackgroundTask` / `deactivateBackgroundTask`. iOS caps
     background execution time — if the OS suspends the job, detect it on next foreground, clean up,
     and offer one-tap retry. Never corrupt state or leave orphan temp files.
