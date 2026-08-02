@@ -1,6 +1,6 @@
 import type { LibraryVideo, VideoAssetId } from '../videoLibrary/types';
 
-export type QualityTierId = 'fullHd' | 'hd';
+export type QualityTierId = 'whatsApp' | 'hd' | 'fullHd';
 
 /** Everything the compressor and the estimator need to know about a source video. */
 export type SourceVideo = {

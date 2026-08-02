@@ -80,42 +80,44 @@ export function PreviewScreen({ outcome, onFinished }: PreviewScreenProps) {
         ) : null}
 
         <SourceDetails outcome={outcome} />
-      </ScrollView>
 
-      <View style={styles.actions}>
-        {canKeepOriginalMetadata ? (
+        {/* Inside the scroll on purpose: a sticky footer of four buttons left the content a few
+            lines of cramped scroll area. The page scrolls as one; the actions end it. */}
+        <View style={styles.actions}>
+          {canKeepOriginalMetadata ? (
+            <Button
+              label="Save as copy"
+              hint="Keeps the original dates"
+              busy={save.busy}
+              onPress={() => save.saveCopy('original')}
+            />
+          ) : null}
           <Button
-            label="Save as copy"
-            hint="Keeps the original dates"
+            label={
+              canKeepOriginalMetadata ? 'Save with a new date' : 'Save as copy'
+            }
+            variant={canKeepOriginalMetadata ? 'secondary' : 'primary'}
+            hint="Creation date is today, location not carried over"
             busy={save.busy}
-            onPress={() => save.saveCopy('original')}
+            onPress={() => save.saveCopy('fresh')}
           />
-        ) : null}
-        <Button
-          label={
-            canKeepOriginalMetadata ? 'Save with a new date' : 'Save as copy'
-          }
-          variant={canKeepOriginalMetadata ? 'secondary' : 'primary'}
-          hint="Creation date is today, location not carried over"
-          busy={save.busy}
-          onPress={() => save.saveCopy('fresh')}
-        />
-        {/* No in-app confirmation: the OS shows its own unavoidable delete dialog, and a second
+          {/* No in-app confirmation: the OS shows its own unavoidable delete dialog, and a second
             prompt of ours in front of it read as asking twice. The stakes go on the button. */}
-        <Button
-          label={replaceLabel(outcome)}
-          variant="danger"
-          hint="Deletes the original video — the system will ask to confirm"
-          disabled={save.busy}
-          onPress={save.replaceOriginal}
-        />
-        <Button
-          label="Discard"
-          variant="ghost"
-          onPress={save.discard}
-          disabled={save.busy}
-        />
-      </View>
+          <Button
+            label={replaceLabel(outcome)}
+            variant="danger"
+            hint="Deletes the original video — the system will ask to confirm"
+            disabled={save.busy}
+            onPress={save.replaceOriginal}
+          />
+          <Button
+            label="Discard"
+            variant="ghost"
+            onPress={save.discard}
+            disabled={save.busy}
+          />
+        </View>
+      </ScrollView>
     </Screen>
   );
 }
@@ -186,5 +188,6 @@ const styles = StyleSheet.create({
   },
   measure: { flex: 1, gap: 2 },
   saved: { textAlign: 'center' },
-  actions: { padding: spacing.lg, gap: spacing.sm },
+  // The scroll content already pads the sides; the top gap comes from the container's own `gap`.
+  actions: { gap: spacing.sm },
 });

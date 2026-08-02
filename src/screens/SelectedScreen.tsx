@@ -5,6 +5,7 @@ import {
   DEFAULT_TIER_ID,
   evaluateTier,
   isAlreadyOptimized,
+  QUALITY_TIERS,
   sourceFactsFrom,
   tierById,
 } from '../core/compression/tiers';
@@ -189,14 +190,17 @@ function confirmDelete(filename: string, onConfirm: () => void): void {
   );
 }
 
-/** HD is the default (§3.2), unless the source has outgrown it. */
+/** HD is the default (§3.2); when it doesn't apply, the first tier that does. */
 function defaultEligibleTier(
   facts: Parameters<typeof isAlreadyOptimized>[0]
 ): QualityTierId | null {
   if (evaluateTier(tierById(DEFAULT_TIER_ID), facts).eligible) {
     return DEFAULT_TIER_ID;
   }
-  return evaluateTier(tierById('fullHd'), facts).eligible ? 'fullHd' : null;
+  const fallback = QUALITY_TIERS.find(
+    tier => evaluateTier(tier, facts).eligible
+  );
+  return fallback?.id ?? null;
 }
 
 const styles = StyleSheet.create({

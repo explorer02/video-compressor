@@ -42,6 +42,10 @@ media store stay device-only.
 Add dependencies with `npx expo install <pkg>`. Native config belongs in [app.json](app.json) via
 config plugins, not in the generated `ios/` and `android/` folders.
 
+Library fixes live in `patches/` via patch-package (applied by the `postinstall` script): edit the
+file under `node_modules/`, then `npx patch-package <pkg> --exclude '(\.cxx|build)'` — the exclude
+keeps local native build artifacts out of the patch.
+
 ## Conventions
 
 - TypeScript `strict`; no `any` in new code.

@@ -1,0 +1,21 @@
+diff --git a/node_modules/react-native-compressor/ios/Video/VideoMain.swift b/node_modules/react-native-compressor/ios/Video/VideoMain.swift
+index 4c6dd1a..2e42dcb 100644
+--- a/node_modules/react-native-compressor/ios/Video/VideoMain.swift
++++ b/node_modules/react-native-compressor/ios/Video/VideoMain.swift
+@@ -341,11 +341,14 @@ class VideoCompressor {
+         ]
+         exporter.stripAudio = stripAudio
+         if !stripAudio {
++            // Patched (ShortenAF): the exporter must re-encode audio (it cannot pass it through),
++            // so encode at AAC's transparent ceiling instead of the original 128 kbps / 44.1 kHz —
++            // phone cameras record 48 kHz, and resampling to 44.1 costs quality for nothing.
+             exporter.audioOutputConfiguration = [
+               AVFormatIDKey: kAudioFormatMPEG4AAC,
+-              AVEncoderBitRateKey: NSNumber(integerLiteral: 128000),
++              AVEncoderBitRateKey: NSNumber(integerLiteral: 256000),
+               AVNumberOfChannelsKey: NSNumber(integerLiteral: 2),
+-              AVSampleRateKey: NSNumber(value: Float(44100))
++              AVSampleRateKey: NSNumber(value: Float(48000))
+             ]
+         }
+ 

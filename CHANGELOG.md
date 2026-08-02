@@ -6,6 +6,18 @@ which always describes the current state of the product.
 
 ## 2026-08-02
 
+- **Preview screen scrolls as one page** (§3.4): the four save/replace/discard buttons moved from
+  a sticky footer into the scroll content — the footer had squeezed the player and details into a
+  few cramped lines; now the user scrolls down to the actions.
+- **Audio stays at full quality on every tier** (§5): Android already remuxes the source audio
+  track untouched; iOS always re-encodes, so the library is patched (`patch-package`, applied on
+  `npm install`) to encode AAC 256 kbps / 48 kHz stereo instead of its hardcoded 128 kbps /
+  44.1 kHz — no more downsampling 48 kHz camera audio.
+- **WhatsApp tier** (§3.2/§5, lifts the old "no low-quality tier" rule): a third quality option,
+  listed first — the library's `auto` mode, which reproduces WhatsApp's envelope (720p,
+  1.2–2.0 Mbps, capped at 95% of the source bitrate). For a video WhatsApp sends at ~43 MB, this
+  tier produces the same, where the HD tier's deliberate ~2× bitrate made ~100 MB. The tier picker
+  now reads smallest-first: WhatsApp → HD → Full HD; HD stays the default.
 - **Smooth progress** (§3.3): the compressing screens show tenths of a percent ("62.4%") and the
   bar fills in 0.1% steps. Encoder progress now crosses the bridge on every native event (was
   every 2%) and the single-job screen updates on the event itself instead of a 500 ms sample. The

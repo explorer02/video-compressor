@@ -38,9 +38,10 @@ No backend — everything on-device.
    original stats (resolution, duration, size, created + modified times, folder), back button to
    Library, a top-bar **Delete** action (remove a redundant video without compressing — verified
    like Replace below), plus a **quality selector** (segmented control):
-   - **Full HD · 1080p** — "Best quality"
+   - **WhatsApp · 720p** — "Chat-app size" (the library's auto envelope; smallest output)
    - **HD · 720p** (default) — "Great for sharing"
-   - Deliberately **no low-quality tier**.
+   - **Full HD · 1080p** — "Best quality"
+     Listed smallest first, so the picker reads as a size ladder.
      Each tier shows its **estimated output size** (see §6), e.g. "HD · 720p · ~14 MB".
      Tiers below the source's resolution are hidden; tiers that can't shrink the file are disabled
      with a reason; if none can help, "Already optimized".
@@ -52,7 +53,9 @@ No backend — everything on-device.
 4. **Preview & decide:** inline player of the compressed file with an **Original / Compressed**
    switch (one full-width player, source swapped underneath, so quality differences are visible);
    original vs **actual** compressed size, % saved, and the original's dates, folder, filename,
-   resolution, and GPS where the platform supplies it. Actions:
+   resolution, and GPS where the platform supplies it. The whole screen scrolls as one page, the
+   action buttons at its end — no sticky footer squeezing the details into a tiny scroll area.
+   Actions:
    - **Save as copy** → sub-choice: **Keep original metadata** ("Keeps the original dates":
      capture + modified dates; GPS is out of scope on Android, see §8) or **Fresh metadata**
      (creation date = now, GPS stripped).
@@ -107,13 +110,21 @@ No backend — everything on-device.
 
 ## 5. Quality tiers & compression spec
 
-| Tier         | Long edge | Video bitrate (@30 fps) | Audio           | Implementation                    |
-| ------------ | --------- | ----------------------- | --------------- | --------------------------------- |
-| Full HD      | 1920 px   | ~4.5 Mbps               | AAC 128 kbps    | `manual` mode, explicit `bitrate` |
-| HD (default) | 1280 px   | ~2.5 Mbps               | AAC 96–128 kbps | `manual` mode, explicit `bitrate` |
+| Tier         | Long edge | Video bitrate (@30 fps)  | Audio            | Implementation                    |
+| ------------ | --------- | ------------------------ | ---------------- | --------------------------------- |
+| WhatsApp     | 1280 px   | ~1.2–2.0 Mbps (envelope) | best (see below) | `auto` mode, library's envelope   |
+| HD (default) | 1280 px   | ~2.5 Mbps                | best (see below) | `manual` mode, explicit `bitrate` |
+| Full HD      | 1920 px   | ~4.5 Mbps                | best (see below) | `manual` mode, explicit `bitrate` |
 
-- Both tiers use `manual` mode: the library's `auto` mode ignores a requested bitrate and applies
-  its own chat-oriented envelope (~2 Mbps ceiling at 720p), which is visibly soft.
+- **WhatsApp** rides the library's `auto` mode, which reproduces WhatsApp's chat envelope: 720p,
+  bitrate between 1.2 and 2.0 Mbps and never above 95% of the source's — the "same size WhatsApp
+  would send" option. Its §6 estimate assumes the 2.0 Mbps ceiling, where large sources land.
+- **HD and Full HD** use `manual` mode: `auto` ignores a requested bitrate and applies that same
+  chat envelope, which is visibly softer than these tiers promise.
+- **Audio is never degraded**, on every tier: Android remuxes the source audio track untouched;
+  iOS has no audio passthrough (the exporter always re-encodes) and is patched — via
+  `patch-package`, see `patches/` — to encode AAC 256 kbps / 48 kHz stereo instead of the
+  library's 128 kbps / 44.1 kHz. The tiers' `audioKbps` (128) exists only for the §6 estimate.
 - Output: **MP4, H.264 + AAC** (maximum gallery compatibility). Video bitrate scales with the
   source's real frame rate. **Never upscale**; preserve aspect ratio and rotation.
 - Tiers below the source's resolution are hidden (output is clamped to the source, so they would

@@ -27,6 +27,7 @@
     "eslint": "^9.0.0",
     "eslint-config-expo": "~57.0.1",
     "eslint-config-prettier": "^10.1.8",
+    "patch-package": "^8.0.1",
     "prettier": "^3.9.6",
     "storybook": "^10.5.5",
     "typescript": "~6.0.3",
@@ -44,7 +45,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "storybook": "storybook dev -p 6006",
-    "storybook:build": "storybook build"
+    "storybook:build": "storybook build",
+    "postinstall": "patch-package"
   },
   "private": true
 }

@@ -4,8 +4,6 @@ import type { QualityTierId } from './types';
 /**
  * The §5 quality tiers, and the arithmetic that turns them into an estimate and an eligibility
  * verdict. Every bitrate and resolution number in the app comes from this table.
- *
- * There is deliberately no low-quality tier (§5).
  */
 
 export type CompressionMethod = 'auto' | 'manual';
@@ -53,7 +51,23 @@ const HD: QualityTier = {
   method: 'manual',
 };
 
-export const QUALITY_TIERS: QualityTier[] = [FULL_HD, HD];
+/**
+ * The library's `auto` mode, which reproduces WhatsApp's envelope: 720p, ~1.2–2.0 Mbps, and never
+ * more than 95% of the source bitrate. `auto` ignores any bitrate we pass, so `videoKbps` here
+ * feeds only the §6 estimate — 2000 is the envelope's 720p ceiling, where big sources land.
+ */
+const WHATSAPP: QualityTier = {
+  id: 'whatsApp',
+  label: 'WhatsApp · 720p',
+  tagline: 'Chat-app size',
+  longEdge: 1280,
+  videoKbps: 2000,
+  audioKbps: 128,
+  method: 'auto',
+};
+
+/** Smallest first — the §3.2 picker reads as a size ladder. */
+export const QUALITY_TIERS: QualityTier[] = [WHATSAPP, HD, FULL_HD];
 
 export const DEFAULT_TIER_ID: QualityTierId = HD.id;
 
