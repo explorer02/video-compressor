@@ -54,33 +54,44 @@ export type BackgroundSession = {
    * precisely when the notification is the only thing the user can see.
    *
    * @param progress 0–1.
+   * @param title Overrides the session title — a batch session spans many videos and re-titles
+   *   the one notification per item, instead of cycling the service itself (see below).
    */
-  update: (progress: number, times: ProgressTimes) => void;
+  update: (progress: number, times: ProgressTimes, title?: string) => void;
   end: () => void;
 };
 
 const INERT_SESSION: BackgroundSession = { update: () => {}, end: () => {} };
 
-export function beginBackgroundSession(title: string): BackgroundSession {
+/**
+ * One session must span one whole unit of user-visible work (a single compression, or an entire
+ * batch). Starting and stopping the service per batch item raced Android's startForeground
+ * obligation — a stop landing between `startForegroundService()` and its delivery leaves the
+ * obligation unmet, and ~10 s later the system kills the app with
+ * ForegroundServiceDidNotStartInTimeException.
+ */
+export function beginBackgroundSession(
+  initialTitle: string
+): BackgroundSession {
   if (!mediaToolsCapabilities.foregroundService) return INERT_SESSION;
 
   let ended = false;
   let posted = '';
 
   void MediaTools.startCompressionService({
-    title,
+    title: initialTitle,
     progress: 0,
     elapsed: '',
     remaining: 'Starting…',
   }).catch(reportFailure);
 
   return {
-    update: (progress, times) => {
+    update: (progress, times, title = initialTitle) => {
       if (ended) return;
 
       // Repeating a notification the system already shows costs a bridge call and a redraw.
       const percent = toPercent(progress);
-      const signature = `${percent}:${times.elapsed}:${times.remaining}`;
+      const signature = `${title}:${percent}:${times.elapsed}:${times.remaining}`;
       if (signature === posted) return;
       posted = signature;
 

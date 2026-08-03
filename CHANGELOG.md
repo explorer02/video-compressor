@@ -4,8 +4,34 @@ Every feature added, changed, or removed gets a dated entry here, in the same ch
 implements it — newest date first. § references point to sections of [product.md](product.md),
 which always describes the current state of the product.
 
+## 2026-08-03
+
+- **Fix: the library header's total size never went down** (§4). The size index kept entries for
+  deleted assets forever, so replacing a video with its compressed copy left the old size in the
+  header's total (and added the new one on top). The index is now pruned against the full library
+  id list every time that list is read — after every library change, the total reflects only
+  videos that still exist.
+- **Fix: batch compression crashed the app** (§7). Two crashes, both fixed:
+  - The batch queue started and stopped the Android foreground service once per video; a stop
+    landing between the next item's `startForegroundService()` and its delivery left the
+    startForeground obligation unmet, and the system killed the app with
+    `ForegroundServiceDidNotStartInTimeException` ~10 s after tapping Compress. A batch now holds
+    **one** service session for its whole run and re-titles the notification per item; the native
+    module additionally drops superseded stops (start-generation guard), reuses a still-live
+    service instead of re-sending a start intent, and — when a stop races ahead of the start
+    intent — the service satisfies the obligation first and then stops itself.
+  - react-native-compressor's GPS trailer scan (`LocationExtractor`) only caught `Exception`, so
+    an `OutOfMemoryError` while allocating its 1 MiB tail buffer crashed the app; patched
+    (`patch-package`) to catch `Throwable` — location recovery is best-effort and must never sink
+    a compression. The underlying heap pressure (a 24-byte allocation also failed once during
+    library scrolling) still deserves a profiling pass.
+
 ## 2026-08-02
 
+- Fix: release APK builds (`gradlew assembleRelease`) failed resource linking — the media-tools
+  notification layouts use androidx.core's `TextAppearance.Compat.Notification` styles, which
+  debug builds resolved transitively through the app but release library verification does not;
+  the module now declares `androidx.core:core-ktx` itself.
 - **Preview screen scrolls as one page** (§3.4): the four save/replace/discard buttons moved from
   a sticky footer into the scroll content — the footer had squeezed the player and details into a
   few cramped lines; now the user scrolls down to the actions.

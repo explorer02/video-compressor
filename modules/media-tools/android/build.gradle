@@ -13,3 +13,10 @@ android {
     versionName '0.1.0'
   }
 }
+
+dependencies {
+  // The notification layouts use TextAppearance.Compat.Notification styles. Debug builds resolve
+  // them transitively through the app, but verifyReleaseResources checks this library against its
+  // own dependencies alone — without this line the release build fails resource linking.
+  implementation 'androidx.core:core-ktx:1.13.1'
+}

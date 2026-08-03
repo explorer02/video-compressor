@@ -33,7 +33,22 @@ class CompressionForegroundService : Service() {
     @Volatile
     var running: CompressionForegroundService? = null
       private set
+
+    /**
+     * Set when a stop was requested before the service's start intent was delivered. onStartCommand
+     * honours it right after startForeground: the system's "startForegroundService() must lead to
+     * startForeground()" obligation is met first, then the service goes away — instead of the
+     * obligation staying unmet and the system killing the app with
+     * ForegroundServiceDidNotStartInTimeException ~10 s later.
+     */
+    @Volatile
+    var stopRequested = false
   }
+
+  /** True once finish() ran. `running` stays set until onDestroy, so restarts must check this too. */
+  @Volatile
+  var finishing = false
+    private set
 
   override fun onBind(intent: Intent?): IBinder? = null
 
@@ -49,8 +64,12 @@ class CompressionForegroundService : Service() {
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     when (intent?.action) {
-      // Every startForegroundService() delivery obliges a startForeground() call.
-      ACTION_START -> startForegroundWith(CompressionNotification.build(this, statusOf(intent)))
+      ACTION_START -> {
+        // Every startForegroundService() delivery obliges a startForeground() call — even when a
+        // stop already arrived, the obligation is met first and only then honoured.
+        startForegroundWith(CompressionNotification.build(this, statusOf(intent)))
+        if (stopRequested) finish()
+      }
       ACTION_STOP -> finish()
     }
     // The job is driven from JS; if the process dies the work is gone, so do not resurrect it.
@@ -59,6 +78,7 @@ class CompressionForegroundService : Service() {
 
   /** Ends the service and removes its notification. Safe to call whether or not it was started. */
   fun finish() {
+    finishing = true
     stopForeground(STOP_FOREGROUND_REMOVE)
     stopSelf()
   }

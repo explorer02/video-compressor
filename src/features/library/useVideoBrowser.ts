@@ -157,6 +157,9 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
       try {
         const ids = await listAllVideoIds();
         if (!active || request !== generation.current) return;
+        // The id list is the truth about what still exists — drop size-index entries for
+        // anything gone, so the header's total size follows deletes and replaces.
+        sizeIndex.prune(ids);
         setLibraryCount(ids.length);
         if (sizeFilter === null && durationFilter === null) {
           setTotalCount(ids.length);
@@ -321,6 +324,8 @@ async function scanLibrary(
   durationFilter: DurationFilter
 ): Promise<LibraryVideo[]> {
   const all = await listAllVideos(mediaStoreSort(sort));
+  // A full read is also the moment to forget sizes of assets that no longer exist (see prune).
+  sizeIndex.prune(all.map(video => video.id));
 
   // Duration rides along in every media-store row; only size needs the index resolved.
   const needsSizes =

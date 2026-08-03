@@ -83,7 +83,9 @@ No backend — everything on-device.
   Persist the last-used sort across launches.
 - **Size sort & filter machinery:** the whole library is indexed once (with an "Indexing sizes…"
   indicator), then ranked and paged from memory, so later size sorts are instant; assets whose
-  size cannot be read sort last. New/changed videos update the index incrementally.
+  size cannot be read sort last. New/changed videos update the index incrementally, and entries
+  for deleted or replaced videos are pruned whenever the full library list is read — the header's
+  total size shrinks when a compression frees space.
   - **Android:** sizes come from batched media-store reads via `media-tools`.
   - **iOS:** file size is NOT a native sort key — the same lazy, persistent index applies once the
     native size reader is implemented; size sort/filter are disabled until then.
@@ -158,7 +160,10 @@ No backend — everything on-device.
     template's own bar is never set — it would draw beside the custom one); template title/text
     back the layout for accessibility surfaces. Updates ride the encoder's own progress events and
     are posted via `notify()`, so they keep flowing while the app is backgrounded. Tapping the
-    notification reopens the app in the Compressing state.
+    notification reopens the app in the Compressing state. One service session spans one unit of
+    user-visible work — a single compression, or an entire batch (each item re-titles the one
+    notification); the service is never cycled per batch item, which would race Android's
+    startForeground obligation and get the app killed.
   - **iOS:** wrap the job with `activateBackgroundTask` / `deactivateBackgroundTask`. iOS caps
     background execution time — if the OS suspends the job, detect it on next foreground, clean up,
     and offer one-tap retry. Never corrupt state or leave orphan temp files.

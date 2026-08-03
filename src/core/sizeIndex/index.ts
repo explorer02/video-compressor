@@ -69,6 +69,28 @@ export const sizeIndex = {
     return pending.size;
   },
 
+  /**
+   * Drops entries for assets that are no longer in the library. Without this a replaced or deleted
+   * video keeps its entry forever and `knownTotalBytes` keeps counting the freed space — the
+   * library header's size then never goes down.
+   */
+  prune(existingIds: readonly VideoAssetId[]): void {
+    if (!reader.available) return;
+
+    const store = openJsonStore(STORE);
+    const keep = new Set<string>(existingIds);
+    let dropped = false;
+
+    for (const id of Object.keys(store.snapshot())) {
+      if (!keep.has(id)) {
+        store.remove(id);
+        dropped = true;
+      }
+    }
+
+    if (dropped) notify();
+  },
+
   subscribe(listener: () => void): () => void {
     listeners.add(listener);
     return () => listeners.delete(listener);

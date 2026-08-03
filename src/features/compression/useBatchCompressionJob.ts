@@ -108,16 +108,20 @@ export function useBatchCompressionJob(plan: BatchPlan): BatchJob {
     };
 
     void ensureNotificationPermission();
+
+    // One service session spans the whole batch; each item re-titles the notification instead.
+    // Cycling the service per item raced the platform's startForeground obligation and got the
+    // app killed with ForegroundServiceDidNotStartInTimeException (see beginBackgroundSession).
+    const itemTitle = (index: number) =>
+      `Compressing ${index + 1} of ${plan.items.length} — ${plan.items[index].video.filename}`;
+    const background = beginBackgroundSession(itemTitle(0));
+
     const ticker = setInterval(() => {
       if (active) setElapsedMs(Date.now() - startedAt);
     }, TICK_MS);
 
     const compressOne = async (index: number): Promise<void> => {
       const { video, action } = plan.items[index];
-      // One session per item keeps the notification title honest about queue position.
-      const background = beginBackgroundSession(
-        `Compressing ${index + 1} of ${plan.items.length} — ${video.filename}`
-      );
 
       try {
         const source = await readSourceVideo(video);
@@ -160,10 +164,19 @@ export function useBatchCompressionJob(plan: BatchPlan): BatchJob {
           progress: 0,
           sourceSizeBytes: source.sizeBytes,
         });
+        background.update(
+          overallOf(itemsRef.current),
+          notificationTimes(),
+          itemTitle(index)
+        );
 
         const run = runCompressionJob(video, source, plan.tier, fraction => {
           patchItem(index, { progress: clampProgress(fraction) });
-          background.update(overallOf(itemsRef.current), notificationTimes());
+          background.update(
+            overallOf(itemsRef.current),
+            notificationTimes(),
+            itemTitle(index)
+          );
         });
         cancelCurrent.current = run.cancel;
         const outcome = await run.outcome;
@@ -181,7 +194,6 @@ export function useBatchCompressionJob(plan: BatchPlan): BatchJob {
       } finally {
         cancelCurrent.current = null;
         workspace.markJobFinished();
-        background.end();
       }
     };
 
@@ -203,6 +215,9 @@ export function useBatchCompressionJob(plan: BatchPlan): BatchJob {
           }
         }
       }
+
+      // Encoding is over; the delete dialog needs no service or notification behind it.
+      background.end();
 
       // §3.4 for batches: every original marked Replace goes into ONE system delete dialog, and
       // only after its compressed copy is safely in the gallery. A denied dialog costs nothing —
@@ -236,6 +251,7 @@ export function useBatchCompressionJob(plan: BatchPlan): BatchJob {
       // Unmounting mid-run must not leave the encoder running headless.
       cancelledRef.current = true;
       cancelCurrent.current?.();
+      background.end();
       workspace.markJobFinished();
     };
   }, [plan]);

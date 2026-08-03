@@ -1,3 +1,19 @@
+diff --git a/node_modules/react-native-compressor/android/src/main/java/com/reactnativecompressor/Video/VideoCompressor/utils/LocationExtractor.kt b/node_modules/react-native-compressor/android/src/main/java/com/reactnativecompressor/Video/VideoCompressor/utils/LocationExtractor.kt
+index 1049c24..ad327de 100644
+--- a/node_modules/react-native-compressor/android/src/main/java/com/reactnativecompressor/Video/VideoCompressor/utils/LocationExtractor.kt
++++ b/node_modules/react-native-compressor/android/src/main/java/com/reactnativecompressor/Video/VideoCompressor/utils/LocationExtractor.kt
+@@ -56,7 +56,10 @@ object LocationExtractor {
+         // the strict regex extract it.
+         viaBox ?: scanTrailerForIso6709(channel)
+       }
+-    } catch (e: Exception) {
++    } catch (e: Throwable) {
++      // Patched (ShortenAF): Throwable, not Exception — scanTrailerForIso6709's 1 MiB buffer can
++      // throw OutOfMemoryError under heap pressure, and best-effort GPS recovery must never crash
++      // the compression it rides along with.
+       Log.w(TAG, "LocationExtractor extract failed", e)
+       null
+     }
 diff --git a/node_modules/react-native-compressor/ios/Video/VideoMain.swift b/node_modules/react-native-compressor/ios/Video/VideoMain.swift
 index 4c6dd1a..2e42dcb 100644
 --- a/node_modules/react-native-compressor/ios/Video/VideoMain.swift

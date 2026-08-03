@@ -414,8 +414,24 @@ class MediaToolsModule : Module() {
 
   // MARK: - Foreground service
 
+  /** Counts start requests, so a queued stop can tell when it has been superseded by a new session. */
+  @Volatile
+  private var serviceStartCount = 0
+
   /** Starting is only ever called while the app is on screen, where a service start is allowed. */
   private fun startService(options: ServiceNotification) {
+    serviceStartCount += 1
+    CompressionForegroundService.stopRequested = false
+
+    val live = CompressionForegroundService.running
+    if (live != null && !live.finishing) {
+      // The service survived the previous session. A second start intent would open a fresh
+      // startForeground obligation that a racing stop could leave unmet — and an unmet obligation
+      // kills the app. Re-titling the live notification is all a new session needs.
+      updateNotification(options)
+      return
+    }
+
     val intent = Intent(context, CompressionForegroundService::class.java).apply {
       action = CompressionForegroundService.ACTION_START
       putExtra(CompressionForegroundService.EXTRA_TITLE, options.title)
@@ -454,11 +470,17 @@ class MediaToolsModule : Module() {
    * and an `AsyncFunction` whose body ends in one tries to send that across the bridge and rejects.
    */
   private fun stopService() {
-    val service = CompressionForegroundService.running
+    val requestedAt = serviceStartCount
     val appContext = context.applicationContext
 
     Handler(Looper.getMainLooper()).post {
-      service?.finish()
+      // A newer session claimed the service while this stop sat in the queue — leave it alone.
+      if (serviceStartCount != requestedAt) return@post
+
+      // The start intent may not have been delivered yet; the flag makes the service stop itself
+      // right after it satisfies the startForeground obligation, instead of the stop being lost.
+      CompressionForegroundService.stopRequested = true
+      CompressionForegroundService.running?.finish()
       // The service may never have started — or already have died — but the notification is ours.
       CompressionNotification.cancel(appContext)
     }
