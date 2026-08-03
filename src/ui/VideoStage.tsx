@@ -2,6 +2,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 
 import { colors, radius } from '../theme';
+import { capPlayerBuffering } from './videoBuffering';
 
 export type VideoStageProps = {
   /** Null while the source is still unknown; the player picks it up as soon as it arrives. */
@@ -25,6 +26,7 @@ export function VideoStage({
   style,
 }: VideoStageProps) {
   const player = useVideoPlayer(source, instance => {
+    capPlayerBuffering(instance);
     instance.loop = loop;
     if (autoPlay) instance.play();
   });

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import {
   DEFAULT_TIER_ID,
@@ -102,9 +102,7 @@ export function SelectedScreen({
           variant="danger"
           busy={deletion.busy}
           disabled={resolving}
-          onPress={() =>
-            confirmDelete(video.filename, () => deletion.remove([video]))
-          }
+          onPress={() => deletion.remove([video])}
         />
       </View>
 
@@ -172,21 +170,6 @@ function Stat({ label, value }: { label: string; value: string }) {
       </AppText>
       <AppText variant="bodyStrong">{value}</AppText>
     </View>
-  );
-}
-
-/**
- * Our own warning first. The OS shows its own delete confirmation afterwards, which cannot be
- * bypassed, but by then the user has already agreed to the intent.
- */
-function confirmDelete(filename: string, onConfirm: () => void): void {
-  Alert.alert(
-    'Delete this video?',
-    `${filename} will be removed from your device. This can’t be undone.`,
-    [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: onConfirm },
-    ]
   );
 }
 

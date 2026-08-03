@@ -25,7 +25,8 @@ No backend — everything on-device.
   `activateBackgroundTask` / `deactivateBackgroundTask` APIs.
 - **expo-media-library** — video enumeration for the browser AND gallery save/delete.
   (No system picker needed; selection happens in the in-app browser.)
-- **expo-video** (preview player), **expo-keep-awake**.
+- **expo-video** (preview player; every player caps buffering — 5 s forward, 24 MB — because
+  ExoPlayer's ~50 s default on high-bitrate camera footage exhausts the Java heap), **expo-keep-awake**.
 - Virtualized list for the browser (`@shopify/flash-list` preferred, FlatList acceptable).
 - **media-tools** — local Expo module for what no JS dependency offers: source video properties
   (frame rate, rotation, capture date, GPS), batched asset file sizes, metadata-preserving gallery
@@ -209,7 +210,9 @@ No backend — everything on-device.
 - Low storage → estimate required space from §6 and fail early with a clear message.
 - Delete-style flows (Replace, Delete, bulk delete): the OS dialog resolves the same way on
   confirm and cancel, so the app checks afterwards and reports plainly what actually happened —
-  including partial results like "3 of 5".
+  including partial results like "3 of 5". Exactly one confirmation reaches the user: where the
+  platform's own delete dialog is mandatory (Android 11+, iOS) it is the only one; the app asks
+  itself only on older Android, which deletes silently.
 - Video deleted/moved by another app while listed → handle stale entries gracefully on tap (refresh + toast).
 
 ## 11. Non-goals (v1)

@@ -15,4 +15,5 @@ export {
 } from './SegmentedControl';
 export { ToastProvider, useToast } from './Toast';
 export { VideoStage, type VideoStageProps } from './VideoStage';
+export { capPlayerBuffering } from './videoBuffering';
 export { useHardwareBack } from './useHardwareBack';

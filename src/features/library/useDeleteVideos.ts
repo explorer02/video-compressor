@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { Alert, Platform } from 'react-native';
 
 import {
   assetExists,
@@ -19,11 +20,12 @@ export type DeleteVideos = {
 };
 
 /**
- * Deletes videos from the device library, one or many.
+ * Deletes videos from the device library, one or many — confirmation included, so callers just
+ * call `remove` and exactly one question reaches the user.
  *
- * The platform shows its own confirmation dialog and resolves the same way whether the user
- * confirmed or dismissed it (§10), so the only way to report the truth is to look for the assets
- * afterwards — and with a batch, the honest answer can be "some of them".
+ * The platform's own delete dialog (Android 11+, iOS) cannot be bypassed and resolves the same
+ * way whether the user confirmed or dismissed it (§10), so the only way to report the truth is to
+ * look for the assets afterwards — and with a batch, the honest answer can be "some of them".
  */
 export function useDeleteVideos({
   onDeleted,
@@ -35,33 +37,65 @@ export function useDeleteVideos({
   const remove = useCallback(
     (videos: LibraryVideo[]) => {
       if (busy || videos.length === 0) return;
-      setBusy(true);
 
-      void (async () => {
-        try {
-          await deleteAssets(videos.map(video => video.id));
+      confirmIntent(videos, () => {
+        setBusy(true);
 
-          const survivors = await countSurvivors(videos);
-          const deleted = videos.length - survivors;
+        void (async () => {
+          try {
+            await deleteAssets(videos.map(video => video.id));
 
-          if (deleted === 0) onKept(keptMessage(videos));
-          else onDeleted(deletedMessage(videos, deleted));
-        } catch (error) {
-          console.warn('[library] failed to delete videos', error);
-          onFailed(
-            videos.length === 1
-              ? 'Could not delete that video.'
-              : 'Could not delete those videos.'
-          );
-        } finally {
-          setBusy(false);
-        }
-      })();
+            const survivors = await countSurvivors(videos);
+            const deleted = videos.length - survivors;
+
+            if (deleted === 0) onKept(keptMessage(videos));
+            else onDeleted(deletedMessage(videos, deleted));
+          } catch (error) {
+            console.warn('[library] failed to delete videos', error);
+            onFailed(
+              videos.length === 1
+                ? 'Could not delete that video.'
+                : 'Could not delete those videos.'
+            );
+          } finally {
+            setBusy(false);
+          }
+        })();
+      });
     },
     [busy, onDeleted, onFailed, onKept]
   );
 
   return { busy, remove };
+}
+
+/**
+ * Android 11+ and iOS put a mandatory system dialog in front of every media delete, so an in-app
+ * warning there would make the user confirm the same delete twice. Only older Android deletes
+ * silently — there the app's own warning is the only thing standing before the files go.
+ */
+const SYSTEM_CONFIRMS_DELETES =
+  Platform.OS === 'ios' ||
+  (Platform.OS === 'android' && Number(Platform.Version) >= 30);
+
+function confirmIntent(videos: LibraryVideo[], onConfirmed: () => void): void {
+  if (SYSTEM_CONFIRMS_DELETES) {
+    onConfirmed();
+    return;
+  }
+
+  Alert.alert(
+    videos.length === 1
+      ? 'Delete this video?'
+      : `Delete ${videos.length} videos?`,
+    videos.length === 1
+      ? `${videos[0].filename} will be removed from your device. This can’t be undone.`
+      : 'They will be removed from your device. This can’t be undone.',
+    [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: onConfirmed },
+    ]
+  );
 }
 
 async function countSurvivors(videos: LibraryVideo[]): Promise<number> {

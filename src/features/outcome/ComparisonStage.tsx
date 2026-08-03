@@ -4,7 +4,12 @@ import { Modal, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import type { SourceVideo } from '../../core/compression/types';
 import { colors, radius, spacing } from '../../theme';
-import { Button, SegmentedControl, type Segment } from '../../ui';
+import {
+  Button,
+  capPlayerBuffering,
+  SegmentedControl,
+  type Segment,
+} from '../../ui';
 
 /**
  * §3.4's comparison player: one surface, two sources, flipped in place.
@@ -43,6 +48,7 @@ export function ComparisonStage({
   const window = useWindowDimensions();
 
   const player = useVideoPlayer(compressed, instance => {
+    capPlayerBuffering(instance);
     instance.loop = true;
     instance.play();
   });

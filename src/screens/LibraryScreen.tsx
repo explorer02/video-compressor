@@ -1,6 +1,6 @@
 import { FlashList } from '@shopify/flash-list';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { formatBytes } from '../core/format';
 import type { LibraryVideo, MediaAccessState } from '../core/videoLibrary';
@@ -120,11 +120,7 @@ export function LibraryScreen({
             selection.exit();
             onCompressMany(videos);
           }}
-          onDelete={() =>
-            confirmDelete(selection.count, () =>
-              deletion.remove(selection.videos)
-            )
-          }
+          onDelete={() => deletion.remove(selection.videos)}
           onDone={selection.exit}
         />
       ) : (
@@ -323,20 +319,6 @@ function Footer() {
 
 function keyExtractor(video: LibraryVideo): string {
   return video.id;
-}
-
-/** Our own warning first; the OS shows its own delete dialog afterwards, which cannot be bypassed. */
-function confirmDelete(count: number, onConfirm: () => void): void {
-  Alert.alert(
-    count === 1 ? 'Delete this video?' : `Delete ${count} videos?`,
-    count === 1
-      ? 'It will be removed from your device. This can’t be undone.'
-      : `They will be removed from your device. This can’t be undone.`,
-    [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: onConfirm },
-    ]
-  );
 }
 
 /** A filtered count reads as filtered, so a short list is never mistaken for a small library. */

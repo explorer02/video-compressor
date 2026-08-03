@@ -6,6 +6,19 @@ which always describes the current state of the product.
 
 ## 2026-08-03
 
+- **Fix: out-of-memory crashes traced to video preview buffering** (§3.4/§9). A heap dump captured
+  at the top of a memory spike showed ~160 MB of media3 `Allocation` chunks: ExoPlayer's default
+  ~50 s forward buffer, held as 64 KB arrays on the Java heap, blows through Android's 256 MB
+  per-app heap on high-bitrate camera footage (30–100 Mbps) whenever a preview or comparison
+  player opens. Every player now caps buffering (5 s forward, 24 MB hard byte cap) via
+  expo-video's `bufferOptions` — local files re-buffer at disk speed, so playback is unaffected.
+  This was the root cause behind the earlier `LocationExtractor` OOM and the scroll OOM.
+- **One confirmation per delete** (§10): the app showed its own "Delete?" alert and then the
+  mandatory system dialog appeared anyway — two pop-ups for one intent. The in-app alert now
+  appears only on Android 10 and below, where the platform deletes silently and it is the sole
+  confirmation; on Android 11+ and iOS the system dialog is the only question asked. The
+  confirmation moved into `useDeleteVideos`, so both delete surfaces (single video, bulk
+  selection) behave identically.
 - **Fix: the library header's total size never went down** (§4). The size index kept entries for
   deleted assets forever, so replacing a video with its compressed copy left the old size in the
   header's total (and added the new one on top). The index is now pruned against the full library
