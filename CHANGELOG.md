@@ -6,6 +6,38 @@ which always describes the current state of the product.
 
 ## 2026-08-04
 
+- **iOS feature parity** (supersedes the "Android ships first" status; §4/§7/§8/§10 updated —
+  device verification still outstanding, tracked in the parity plan):
+  - `media-tools` implemented on iOS: source properties (`PHAsset` dates/GPS + `AVAsset` frame
+    rate, rotation, bitrate — requested without network access so details never trigger an iCloud
+    download), batched asset sizes via `PHAssetResource` metadata (no file I/O; unlocks §4's size
+    sort, filter, and header total), and a metadata-carrying save (`PHAssetCreationRequest` with
+    capture date + GPS set in the creation change block; write-back via `PHAssetChangeRequest`
+    verified by read-back). Capabilities now read true; the JS above lights up unchanged.
+  - **Truthful save reports** (§8): `saveVideo` on both platforms resolves `{assetId, report}` —
+    Android verifies `DATE_TAKEN` by read-back, iOS reports what the change block carried — and
+    the toast is built from that report instead of a hardcoded applied-fields claim (which would
+    have lied on iOS, where the modified date is system-owned and reported as skipped). Saves can
+    now carry GPS where the platform stores it (iOS); Android reports it skipped with the §8
+    reason. `savedMessage` gained the iOS-shaped success: "Saved with the original date and
+    location."
+  - **§7 background continuation on iOS**: compression sessions now pick a strategy — Android's
+    foreground service as before, or the compressor's `activateBackgroundTask` /
+    `deactivateBackgroundTask` (one task per job or batch). On expiry the encoder is cancelled
+    cleanly: the single job fails with a plain retry message, a batch stops through its cancel
+    path (finished items stay saved, the rest read "Paused in the background"); an OS kill is
+    covered by the existing next-launch interrupted-job report.
+  - **§6 estimates**: the audio term is now per-platform — 128 kbps on Android (remux proxy),
+    256 kbps on iOS (the patched encoder's rate) — closing a ~1 MB/min iOS undershoot.
+  - **Platform-honest copy**: the keep-original hint says "dates and location" only where GPS can
+    carry (§8); the batch metadata segment no longer promises location on Android; iOS Replace
+    states the size difference and points at Recently Deleted instead of promising freed space
+    (§10); the Compress button reads "Preparing video…" while a source resolves (iCloud
+    downloads), and a failed load now distinguishes a vanished asset (back to library) from a
+    retryable one (stay put) (§10).
+  - Tooling: two pre-existing `react-hooks/immutability` lint errors in the comparison stage are
+    suppressed with a scoped, explained disable — expo-video's player is an imperative handle,
+    driven from event handlers, not a render-phase mutation. Lint is green again.
 - Planning (docs only, no product change): [ios-parity-plan.md](ios-parity-plan.md) — the phased
   route to iOS feature parity. Inventories what is already cross-platform versus stubbed behind
   `mediaToolsCapabilities`, then sequences the work: boot/audit, native reads (properties +

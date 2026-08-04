@@ -11,6 +11,8 @@ import {
 import {
   MediaTools,
   mediaToolsCapabilities,
+  type AppliedMetadataReport,
+  type GeoLocation,
 } from '../../../modules/media-tools';
 import type {
   LibraryVideo,
@@ -137,12 +139,23 @@ export type SaveTarget = {
   folder?: string;
   capturedAtMs?: number;
   modifiedAtMs?: number;
+  /** Carried where the platform can store it (iOS); elsewhere reported as skipped. */
+  location?: GeoLocation;
+};
+
+export type SavedToLibrary = {
+  assetId: VideoAssetId;
+  /**
+   * What the save itself carried, when the platform sets metadata as the asset is created.
+   * Null means a plain create happened and the caller owns the write-back pass.
+   */
+  carried: AppliedMetadataReport | null;
 };
 
 /**
  * Saves a finished encode into the gallery.
  *
- * Where the platform can do it, everything — folder and both dates — is set as the asset is
+ * Where the platform can do it, everything — folder, dates, location — is set as the asset is
  * created, because a media store honours the values a row is born with but is free to ignore the
  * same columns on a later update. That is the difference between the dates sticking and not.
  * Elsewhere this falls back to a plain create, and the caller writes metadata afterwards.
@@ -150,9 +163,9 @@ export type SaveTarget = {
 export async function saveToLibrary(
   filePath: string,
   target?: SaveTarget
-): Promise<VideoAssetId> {
+): Promise<SavedToLibrary> {
   if (mediaToolsCapabilities.librarySave && target) {
-    return MediaTools.saveVideo({
+    const { assetId, report } = await MediaTools.saveVideo({
       path: filePath,
       filename: target.filename,
       ...(target.folder ? { folder: target.folder } : {}),
@@ -162,15 +175,14 @@ export async function saveToLibrary(
       ...(target.modifiedAtMs !== undefined
         ? { modifiedAtMs: target.modifiedAtMs }
         : {}),
+      ...(target.location ?? {}),
     });
+    return { assetId, carried: report };
   }
 
   const asset = await Asset.create(filePath);
-  return asset.id;
+  return { assetId: asset.id, carried: null };
 }
-
-/** True when `saveToLibrary` also stores the dates, so no write-back pass is needed. */
-export const saveCarriesMetadata = mediaToolsCapabilities.librarySave;
 
 /**
  * Deletes assets, showing the OS confirmation dialog the platform requires.

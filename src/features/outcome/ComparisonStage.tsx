@@ -58,6 +58,9 @@ export function ComparisonStage({
   const showingRef = useRef<Side>('compressed');
   const generation = useRef(0);
 
+  /* eslint-disable react-hooks/immutability -- expo-video's player is an imperative handle:
+     replaceAsync/seek/play from an event handler are its documented API, and the refs are
+     event-handler state — none of this mutates anything during render. */
   const switchTo = useCallback(
     (side: Side) => {
       if (side === showingRef.current) return;
@@ -84,6 +87,7 @@ export function ComparisonStage({
     },
     [compressed, original, player]
   );
+  /* eslint-enable react-hooks/immutability */
 
   const inlineHeight = inlineStageHeight(source, window);
 

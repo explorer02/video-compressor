@@ -26,6 +26,9 @@ export type { AppliedMetadataReport };
 export const canKeepOriginalMetadata =
   mediaToolsCapabilities.captureDateWriteBack;
 
+/** Whether a keep-original save also carries GPS — iOS can, Android cannot (§8). UI copy keys on it. */
+export const canCarryLocation = mediaToolsCapabilities.locationWriteBack;
+
 /**
  * Reads the facts a compression needs: a real path, exact size, and the capture metadata that
  * "keep original metadata" will copy forward.
@@ -88,11 +91,15 @@ export async function applySavedAssetMetadata(
       : {}),
   });
 
+  logMetadataSkips(report);
+  return report;
+}
+
+/** §8's logging duty: every field that could not be carried over is named, with the reason. */
+export function logMetadataSkips(report: AppliedMetadataReport): void {
   for (const { field, reason } of report.skipped) {
     console.warn(`[metadata] ${field} was not carried over: ${reason}`);
   }
-
-  return report;
 }
 
 async function readNativeProperties(

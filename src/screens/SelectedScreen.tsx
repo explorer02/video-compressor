@@ -19,7 +19,11 @@ import {
 } from '../core/format';
 import { readSourceVideo } from '../core/metadata';
 import { sizeIndex } from '../core/sizeIndex';
-import { playbackSource, type LibraryVideo } from '../core/videoLibrary';
+import {
+  assetExists,
+  playbackSource,
+  type LibraryVideo,
+} from '../core/videoLibrary';
 import { TierSelector } from '../features/compression/TierSelector';
 import { useDeleteVideos } from '../features/library/useDeleteVideos';
 import { useVideoDetails } from '../features/library/useVideoDetails';
@@ -74,6 +78,7 @@ export function SelectedScreen({
   });
 
   // Resolving a real path is the expensive call, so it happens once, here, on the way to encoding.
+  // On iOS it can also mean downloading an iCloud-offloaded original — the button says so.
   const start = () => {
     if (!tier || resolving) return;
     setResolving(true);
@@ -83,8 +88,19 @@ export function SelectedScreen({
         onStart(await readSourceVideo(video), tier);
       } catch (error) {
         console.warn('[selected] failed to read source video', error);
-        toast.show('That video is no longer available.', 'danger');
-        onBack();
+
+        // A vanished asset and a failed load are different stories: the first has nothing left to
+        // retry (§10 stale entries — back out), the second — an iCloud download without a
+        // connection, a transient read error — deserves another tap from right here.
+        if (await isGone(video)) {
+          toast.show('That video is no longer available.', 'danger');
+          onBack();
+        } else {
+          toast.show(
+            'Could not load this video. If it is stored in iCloud, check your connection and try again.',
+            'danger'
+          );
+        }
       } finally {
         setResolving(false);
       }
@@ -151,7 +167,7 @@ export function SelectedScreen({
       {optimized ? null : (
         <View style={styles.actions}>
           <Button
-            label="Compress"
+            label={resolving ? 'Preparing video…' : 'Compress'}
             onPress={start}
             disabled={tier === null}
             busy={resolving}
@@ -171,6 +187,15 @@ function Stat({ label, value }: { label: string; value: string }) {
       <AppText variant="bodyStrong">{value}</AppText>
     </View>
   );
+}
+
+/** "It failed" and "it is gone" call for different exits; a failed check counts as still there. */
+async function isGone(video: LibraryVideo): Promise<boolean> {
+  try {
+    return !(await assetExists(video.id));
+  } catch {
+    return false;
+  }
 }
 
 /** HD is the default (§3.2); when it doesn't apply, the first tier that does. */

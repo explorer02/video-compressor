@@ -1,4 +1,5 @@
 import { PermissionsAndroid, Platform } from 'react-native';
+import { Video } from 'react-native-compressor';
 
 import {
   MediaTools,
@@ -8,9 +9,13 @@ import {
 /**
  * Keeps a compression alive while the app is backgrounded (§7).
  *
- * On Android that means a foreground service with a live progress notification and no time limit —
- * react-native-compressor provides only a partial wake lock, so the service is ours. On a platform
- * with no implementation this degrades to running in the foreground, and the call site is unchanged.
+ * Two strategies behind one call site:
+ * - **Android** runs a foreground service with a live progress notification and no time limit —
+ *   react-native-compressor provides only a partial wake lock, so the service is ours.
+ * - **iOS** has no such service; the job rides the compressor's own background task
+ *   (`UIApplication.beginBackgroundTask`), which buys a bounded window — roughly 30 seconds to a
+ *   few minutes — after the app leaves the screen. When the OS calls time, `onSuspended` lets the
+ *   owner stop the encoder cleanly instead of being frozen mid-write.
  */
 
 /** Android 13 made posting notifications a runtime permission. */
@@ -61,20 +66,33 @@ export type BackgroundSession = {
   end: () => void;
 };
 
-const INERT_SESSION: BackgroundSession = { update: () => {}, end: () => {} };
+export type BackgroundSessionOptions = {
+  /**
+   * The OS ended the background window while work was still running — iOS in practice. The owner
+   * should stop its encoder cleanly; recovery is the §10 interrupted-job path.
+   */
+  onSuspended?: () => void;
+};
 
 /**
  * One session must span one whole unit of user-visible work (a single compression, or an entire
  * batch). Starting and stopping the service per batch item raced Android's startForeground
  * obligation — a stop landing between `startForegroundService()` and its delivery leaves the
  * obligation unmet, and ~10 s later the system kills the app with
- * ForegroundServiceDidNotStartInTimeException.
+ * ForegroundServiceDidNotStartInTimeException. The same one-session rule keeps iOS inside the
+ * compressor's one-background-task-at-a-time limit.
  */
 export function beginBackgroundSession(
-  initialTitle: string
+  initialTitle: string,
+  options: BackgroundSessionOptions = {}
 ): BackgroundSession {
-  if (!mediaToolsCapabilities.foregroundService) return INERT_SESSION;
+  return mediaToolsCapabilities.foregroundService
+    ? beginServiceSession(initialTitle)
+    : beginBackgroundTaskSession(options);
+}
 
+/** Android: the media-tools foreground service, §7's notification included. */
+function beginServiceSession(initialTitle: string): BackgroundSession {
   let ended = false;
   let posted = '';
 
@@ -105,6 +123,35 @@ export function beginBackgroundSession(
       if (ended) return;
       ended = true;
       void MediaTools.stopCompressionService().catch(reportFailure);
+    },
+  };
+}
+
+/**
+ * iOS (and any platform without a service): the compressor's background task keeps the process
+ * running for the OS's bounded window. There is no notification surface here by design — §7's
+ * progress notification is an Android concept — so `update` has nothing to post.
+ */
+function beginBackgroundTaskSession({
+  onSuspended,
+}: BackgroundSessionOptions): BackgroundSession {
+  let ended = false;
+
+  void Promise.resolve(
+    Video.activateBackgroundTask(() => {
+      // Expiry after end() is just the OS reclaiming a window nobody needs anymore.
+      if (!ended) onSuspended?.();
+    })
+  ).catch(reportFailure);
+
+  return {
+    update: () => {},
+    end: () => {
+      if (ended) return;
+      ended = true;
+      void Promise.resolve(Video.deactivateBackgroundTask()).catch(
+        reportFailure
+      );
     },
   };
 }

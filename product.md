@@ -3,9 +3,10 @@
 This document describes the product **as it currently exists** and is updated in the same change
 that adds, changes, or removes a feature. Dated history lives in [CHANGELOG.md](CHANGELOG.md).
 
-**Status:** Android ships first. iOS-specific capabilities (metadata write-back, native asset
-sizes, background task) sit behind the same typed interfaces and report as unsupported until
-implemented.
+**Status:** Feature parity on Android and iOS. The platforms differ only where the OSes do: §7
+background behavior (foreground service vs bounded background task), §8 location (iOS only) and
+modified date (Android only). iOS device verification is tracked in
+[ios-parity-plan.md](ios-parity-plan.md).
 
 ## 1. Overview
 
@@ -30,7 +31,8 @@ No backend — everything on-device.
 - Virtualized list for the browser (`@shopify/flash-list` preferred, FlatList acceptable).
 - **media-tools** — local Expo module for what no JS dependency offers: source video properties
   (frame rate, rotation, capture date, GPS), batched asset file sizes, metadata-preserving gallery
-  save, and the Android **foreground service** with its progress notification.
+  save (MediaStore on Android, `PHAssetCreationRequest` on iOS), and the Android **foreground
+  service** with its progress notification.
 
 ## 3. User flow (state machine)
 
@@ -57,9 +59,10 @@ No backend — everything on-device.
    resolution, and GPS where the platform supplies it. The whole screen scrolls as one page, the
    action buttons at its end — no sticky footer squeezing the details into a tiny scroll area.
    Actions:
-   - **Save as copy** → sub-choice: **Keep original metadata** ("Keeps the original dates":
-     capture + modified dates; GPS is out of scope on Android, see §8) or **Fresh metadata**
-     (creation date = now, GPS stripped).
+   - **Save as copy** → sub-choice: **Keep original metadata** (capture + modified dates on
+     Android; capture date + GPS on iOS, which has no settable modified date — see §8) or
+     **Fresh metadata** (creation date = now, GPS stripped). The button's hint names exactly what
+     the platform will carry.
    - **Replace original** → save the compressed copy (always with original metadata), then delete the
      source asset. The OS will show a **system confirmation dialog** (Android 11+
      `MediaStore.createDeleteRequest`, iOS `PHAssetChangeRequest.deleteAssets`) — this cannot be
@@ -88,8 +91,9 @@ No backend — everything on-device.
   for deleted or replaced videos are pruned whenever the full library list is read — the header's
   total size shrinks when a compression frees space.
   - **Android:** sizes come from batched media-store reads via `media-tools`.
-  - **iOS:** file size is NOT a native sort key — the same lazy, persistent index applies once the
-    native size reader is implemented; size sort/filter are disabled until then.
+  - **iOS:** file size is NOT a native sort key either — sizes come from `PHAssetResource`
+    metadata reads via `media-tools` (no file I/O and no iCloud download, so offloaded libraries
+    index too), through the same lazy, persistent index.
 - **Size filter:** any size, or at least / under 1 / 2 / 5 / 10 / 20 / 50 / 100 / 500 MB — at
   least, for finding the videos worth acting on; under, for what already fits somewhere. Persists
   across launches; disabled on platforms with no size reader. Videos with unknown size are
@@ -127,7 +131,9 @@ No backend — everything on-device.
 - **Audio is never degraded**, on every tier: Android remuxes the source audio track untouched;
   iOS has no audio passthrough (the exporter always re-encodes) and is patched — via
   `patch-package`, see `patches/` — to encode AAC 256 kbps / 48 kHz stereo instead of the
-  library's 128 kbps / 44.1 kHz. The tiers' `audioKbps` (128) exists only for the §6 estimate.
+  library's 128 kbps / 44.1 kHz. The tiers' `audioKbps` exists only for the §6 estimate and
+  matches the platform's reality: 128 on Android (a typical camera track), 256 on iOS (the
+  patched encoder's rate).
 - Output: **MP4, H.264 + AAC** (maximum gallery compatibility). Video bitrate scales with the
   source's real frame rate. **Never upscale**; preserve aspect ratio and rotation.
 - Tiers below the source's resolution are hidden (output is clamped to the source, so they would
@@ -165,9 +171,15 @@ No backend — everything on-device.
     user-visible work — a single compression, or an entire batch (each item re-titles the one
     notification); the service is never cycled per batch item, which would race Android's
     startForeground obligation and get the app killed.
-  - **iOS:** wrap the job with `activateBackgroundTask` / `deactivateBackgroundTask`. iOS caps
-    background execution time — if the OS suspends the job, detect it on next foreground, clean up,
-    and offer one-tap retry. Never corrupt state or leave orphan temp files.
+  - **iOS:** the job — or the whole batch — is wrapped in the compressor's
+    `activateBackgroundTask` / `deactivateBackgroundTask`, one task per unit of user-visible work
+    (mirroring the one-service-per-batch rule; the library allows only one background task at a
+    time). iOS caps the background window at roughly 30 s–3 min. When it expires, the encoder is
+    cancelled cleanly: the single-job screen shows a failed state with a plain retry message; a
+    batch stops through its own cancel path, so already-finished videos stay saved and the rest
+    read "Paused in the background". If the OS kills the app instead, the next launch's
+    interrupted-job report covers it (§10). There is no progress notification on iOS — that
+    surface is Android's. Never corrupt state or leave orphan temp files.
 - **Speed acceptance target:** ≥ 2× real-time on a mid-range 2023+ device
   (a 60-second 4K clip → 720p in ≤ 30 seconds).
 
@@ -176,14 +188,23 @@ No backend — everything on-device.
 - Before compressing, read from the source: creation date/time, modified date, orientation, frame
   rate, and GPS where the platform supplies it.
 - **Copy + Keep original metadata (default):** the saved gallery asset shows the **original
-  capture and modified dates** (not today). Saving goes through `media-tools`: folder and both
-  dates are set in the media-store insert itself (a later column update may be recomputed or
-  ignored), and the source's dates are also patched into the MP4's `mvhd`/`tkhd`/`mdhd` atoms
-  before the bytes enter the store — the post-publish scan re-derives `DATE_TAKEN` from the file's
-  own `creation_time`, so the file itself must carry the right dates. Every write is verified by
-  read-back. Platforms without this capability fall back to create-then-write-back.
+  capture date** (not today). Saving goes through `media-tools`, and the save itself resolves
+  with a per-field report of what was actually carried — the success toast is built from that
+  report, never from what was asked for.
+  - **Android:** folder and both dates are set in the media-store insert itself (a later column
+    update may be recomputed or ignored), and the source's dates are also patched into the MP4's
+    `mvhd`/`tkhd`/`mdhd` atoms before the bytes enter the store — the post-publish scan re-derives
+    `DATE_TAKEN` from the file's own `creation_time`, so the file itself must carry the right
+    dates. Every write is verified by read-back.
+  - **iOS:** capture date and GPS are set in the same `PHAssetCreationRequest` change block the
+    asset is born in. Photos keeps this metadata in its own database and never re-derives it from
+    the file, so no atom stamping is needed. iOS has no settable modified date
+    (`PHAsset.modificationDate` is system-owned) — reported as skipped, never faked.
+  - Platforms without the save capability fall back to create-then-write-back
+    (`PHAssetChangeRequest` on iOS), whose report is verified by reading the asset back.
 - **Location:** out of scope on Android by decision — MediaStore's location columns were removed
-  in Android 10. iOS (`PHAssetChangeRequest.location`) when implemented.
+  in Android 10. Carried on iOS: set in the save's creation request, or via
+  `PHAssetChangeRequest.location` on the write-back path.
 - **Copy + Fresh metadata:** creation date = now; GPS not carried over.
 - **Replace original:** always keeps original metadata.
 - Saves land in the **source video's own folder**, not the camera folder.
@@ -208,11 +229,17 @@ No backend — everything on-device.
 - Portrait and landscape both keep correct orientation.
 - Cancel, or app killed mid-compression → temp files cleaned on next launch; offer retry.
 - Low storage → estimate required space from §6 and fail early with a clear message.
+- iCloud-offloaded sources ("Optimize iPhone Storage") download before compressing — the Compress
+  button reads "Preparing video…" for the wait. A load failure distinguishes its exits: a vanished
+  asset backs out to the library (stale entry), anything else — an iCloud download with no
+  connection, a transient read error — keeps the screen so the user can retry from where they are.
 - Delete-style flows (Replace, Delete, bulk delete): the OS dialog resolves the same way on
   confirm and cancel, so the app checks afterwards and reports plainly what actually happened —
   including partial results like "3 of 5". Exactly one confirmation reaches the user: where the
   platform's own delete dialog is mandatory (Android 11+, iOS) it is the only one; the app asks
-  itself only on older Android, which deletes silently.
+  itself only on older Android, which deletes silently. On iOS a delete moves the original to
+  Recently Deleted (~30 days) rather than freeing space at once — Replace's button copy states
+  the size difference there instead of promising freed-up space.
 - Video deleted/moved by another app while listed → handle stale entries gracefully on tap (refresh + toast).
 
 ## 11. Non-goals (v1)

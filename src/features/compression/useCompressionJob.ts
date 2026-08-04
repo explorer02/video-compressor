@@ -57,6 +57,7 @@ export function useCompressionJob({
 
   const cancelRun = useRef<(() => void) | null>(null);
   const cancelled = useRef(false);
+  const suspended = useRef(false);
 
   const cancel = useCallback(() => {
     cancelled.current = true;
@@ -87,7 +88,15 @@ export function useCompressionJob({
     // The permission prompt is not awaited: encoding starts immediately either way, and the next
     // progress tick posts the notification once the user has answered.
     void ensureNotificationPermission();
-    const background = beginBackgroundSession(`Compressing ${video.filename}`);
+    const background = beginBackgroundSession(`Compressing ${video.filename}`, {
+      // §7 iOS: the OS ended the background window. Stop the encoder cleanly now — the failed
+      // state below (or, if the OS kills the app regardless, the next launch's interrupted-job
+      // toast) is where the retry lives.
+      onSuspended: () => {
+        suspended.current = true;
+        cancelRun.current?.();
+      },
+    });
 
     // The screen's own clock, so elapsed time keeps counting between encoder events. It stops
     // while the app is backgrounded — Android suspends JS timers with the activity — which is why
@@ -140,7 +149,9 @@ export function useCompressionJob({
         settled = true;
         workspace.markJobFinished();
         if (cancelled.current) onCancelled();
-        else setJob({ phase: 'failed', message: describe(error) });
+        else if (suspended.current) {
+          setJob({ phase: 'failed', message: SUSPENDED_IN_BACKGROUND });
+        } else setJob({ phase: 'failed', message: describe(error) });
       } finally {
         clearInterval(ticker);
         background.end();
@@ -166,6 +177,9 @@ export function useCompressionJob({
 
 const NOT_ENOUGH_SPACE =
   'Not enough free space on this device to compress this video.';
+
+const SUSPENDED_IN_BACKGROUND =
+  'iOS paused this compression in the background. Keep the app open while it runs, or start it again.';
 
 function estimateEta(elapsedMs: number, progress: number): number | null {
   if (progress < MIN_PROGRESS_FOR_ETA) return null;

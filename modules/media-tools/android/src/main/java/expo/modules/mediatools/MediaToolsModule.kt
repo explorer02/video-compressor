@@ -200,8 +200,11 @@ class MediaToolsModule : Module() {
    *
    * `IS_PENDING` keeps the row invisible to other apps until the bytes are in, so no gallery ever
    * shows a half-written video.
+   *
+   * Resolves with the new asset's id plus a report of which metadata fields the save actually
+   * carried — the caller's toast is built from that report, not from what was asked for.
    */
-  private fun saveVideo(options: SaveVideoInput): String {
+  private fun saveVideo(options: SaveVideoInput): Map<String, Any> {
     // Request and outcome bracket every save, so a metadata bug report needs no extra build.
     Log.i(TAG, "[save] request ${describe(options)}")
 
@@ -213,7 +216,40 @@ class MediaToolsModule : Module() {
     assertDates(uri, options)
 
     Log.i(TAG, "[save] final ${readColumns(uri)}")
-    return uri.toString()
+    return mapOf(
+      "assetId" to uri.toString(),
+      "report" to saveReport(uri, options)
+    )
+  }
+
+  /**
+   * §8's truth test, folded into the save: each requested field is judged by what the store holds
+   * now, not by whether a write call returned.
+   *
+   * DATE_TAKEN is ours alone, so it must read back exactly. DATE_MODIFIED is provider-owned and
+   * recomputed from the file — which `assertDates` stamped to the right value — so the write is
+   * counted as applied rather than failed for not matching a column the provider controls.
+   * Location can never follow on Android (§8): the columns were removed in Android 10.
+   */
+  private fun saveReport(uri: Uri, options: SaveVideoInput): Map<String, Any> {
+    val applied = mutableListOf<String>()
+    val skipped = mutableListOf<Map<String, String>>()
+
+    options.capturedAtMs?.toLong()?.let { expected ->
+      val actual = queryLong(uri, MediaStore.Video.Media.DATE_TAKEN)
+      if (actual == expected) applied.add("capturedAt")
+      else skipped.add(field("capturedAt", "The media store holds $actual instead of $expected."))
+    }
+
+    options.modifiedAtMs?.let { applied.add("modifiedAt") }
+
+    if (options.latitude != null && options.longitude != null) {
+      skipped.add(
+        field("location", "Android removed the media store's location columns in Android 10.")
+      )
+    }
+
+    return mapOf("applied" to applied, "skipped" to skipped)
   }
 
   /**
@@ -498,6 +534,11 @@ class SaveVideoInput : Record {
   @Field val capturedAtMs: Double? = null
 
   @Field val modifiedAtMs: Double? = null
+
+  /** Accepted so the surface matches iOS, where a save can carry GPS; here it reports skipped. */
+  @Field val latitude: Double? = null
+
+  @Field val longitude: Double? = null
 }
 
 class SaveFailedException(message: String) : Exception(message)

@@ -22,7 +22,7 @@ import {
   formatResolution,
   formatSavingPercent,
 } from '../core/format';
-import { canKeepOriginalMetadata } from '../core/metadata';
+import { canCarryLocation, canKeepOriginalMetadata } from '../core/metadata';
 import type { LibraryVideo, VideoAssetId } from '../core/videoLibrary';
 import { useBatchSourceFacts } from '../features/compression/useBatchSourceFacts';
 import { VideoThumbnail } from '../features/library/VideoThumbnail';
@@ -382,7 +382,10 @@ const COPY_METADATA_SEGMENTS: Segment<BatchCopyMetadata>[] = [
   {
     value: 'original',
     label: 'Original dates',
-    detail: 'Copies keep the capture date and location',
+    // Location only where the platform can store it (§8) — promising it on Android would be false.
+    detail: canCarryLocation
+      ? 'Copies keep the capture date and location'
+      : 'Copies keep the capture date',
   },
   {
     value: 'fresh',

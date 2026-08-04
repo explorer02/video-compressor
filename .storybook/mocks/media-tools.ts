@@ -8,6 +8,7 @@ import type {
   AppliedMetadataReport,
   MediaToolsCapabilities,
   NativeVideoProperties,
+  SavedVideo,
   SaveVideoOptions,
   ServiceNotification,
 } from '../../modules/media-tools';
@@ -23,8 +24,10 @@ export const mediaToolsCapabilities: MediaToolsCapabilities = {
 
 export const MediaTools = {
   getCapabilities: (): MediaToolsCapabilities => mediaToolsCapabilities,
-  saveVideo: async (_options: SaveVideoOptions): Promise<string> =>
-    'mock-saved-asset',
+  saveVideo: async (_options: SaveVideoOptions): Promise<SavedVideo> => ({
+    assetId: 'mock-saved-asset',
+    report: { applied: [], skipped: [] },
+  }),
   readVideoProperties: async (
     _assetId: string
   ): Promise<NativeVideoProperties | null> => null,

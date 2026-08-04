@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 import type { LibraryVideo } from '../videoLibrary';
 import type { QualityTierId } from './types';
 
@@ -5,6 +7,14 @@ import type { QualityTierId } from './types';
  * The §5 quality tiers, and the arithmetic that turns them into an estimate and an eligibility
  * verdict. Every bitrate and resolution number in the app comes from this table.
  */
+
+/**
+ * Audio's contribution to the §6 estimate — a platform fact, not a capability, hence the one
+ * `Platform.select` in this file. Android remuxes the source track untouched, so 128 kbps stands
+ * in for a typical camera AAC track. iOS always re-encodes and the app pins its exporter to
+ * 256 kbps (see patches/), so estimating at 128 would undershoot every iOS output by ~1 MB/min.
+ */
+const ESTIMATE_AUDIO_KBPS = Platform.select({ ios: 256, default: 128 });
 
 export type CompressionMethod = 'auto' | 'manual';
 
@@ -29,7 +39,7 @@ const FULL_HD: QualityTier = {
   tagline: 'Best quality',
   longEdge: 1920,
   videoKbps: 4500,
-  audioKbps: 128,
+  audioKbps: ESTIMATE_AUDIO_KBPS,
   method: 'manual',
 };
 
@@ -47,7 +57,7 @@ const HD: QualityTier = {
   tagline: 'Great for sharing',
   longEdge: 1280,
   videoKbps: 2500,
-  audioKbps: 128,
+  audioKbps: ESTIMATE_AUDIO_KBPS,
   method: 'manual',
 };
 
@@ -62,7 +72,7 @@ const WHATSAPP: QualityTier = {
   tagline: 'Chat-app size',
   longEdge: 1280,
   videoKbps: 2000,
-  audioKbps: 128,
+  audioKbps: ESTIMATE_AUDIO_KBPS,
   method: 'auto',
 };
 

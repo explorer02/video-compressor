@@ -23,10 +23,25 @@ export type GeoLocation = { latitude: number; longitude: number };
 export type SaveVideoOptions = {
   path: string;
   filename: string;
-  /** MediaStore `RELATIVE_PATH`, e.g. "DCIM/Camera/". Omitted saves to the platform default. */
+  /**
+   * MediaStore `RELATIVE_PATH`, e.g. "DCIM/Camera/". Omitted saves to the platform default.
+   * iOS has no folders — albums are not directories — and ignores it by design.
+   */
   folder?: string;
   capturedAtMs?: number;
   modifiedAtMs?: number;
+  /** Carried where `locationWriteBack` is true (iOS); elsewhere reported as skipped. */
+  latitude?: number;
+  longitude?: number;
+};
+
+export type SavedVideo = {
+  assetId: string;
+  /**
+   * Which metadata fields the save itself carried, verified against what the platform's store
+   * actually holds — the §8 truth the caller's toast is built from.
+   */
+  report: AppliedMetadataReport;
 };
 
 export type NativeVideoProperties = {
@@ -59,8 +74,7 @@ export type ServiceNotification = {
 
 type MediaToolsNative = {
   getCapabilities: () => MediaToolsCapabilities;
-  /** Resolves with the saved asset's id. */
-  saveVideo: (options: SaveVideoOptions) => Promise<string>;
+  saveVideo: (options: SaveVideoOptions) => Promise<SavedVideo>;
   readVideoProperties: (
     assetId: string
   ) => Promise<NativeVideoProperties | null>;

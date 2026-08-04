@@ -1,13 +1,11 @@
 import type { CompressionOutcome } from '../../core/compression/types';
 import {
   applySavedAssetMetadata,
+  canCarryLocation,
+  logMetadataSkips,
   type AppliedMetadataReport,
 } from '../../core/metadata';
-import {
-  saveCarriesMetadata,
-  saveToLibrary,
-  type SaveTarget,
-} from '../../core/videoLibrary';
+import { saveToLibrary, type SaveTarget } from '../../core/videoLibrary';
 import { workspace } from '../../core/workspace';
 
 /**
@@ -33,11 +31,12 @@ export async function saveCompressedCopy(
 }
 
 /**
- * Saves the encode, carrying the source's folder and dates when asked for.
+ * Saves the encode, carrying the source's folder, dates, and — where the platform stores it —
+ * location, when asked for.
  *
- * Where the platform sets metadata as the asset is created, that is the whole job and nothing can
- * be partially applied. Where it does not, the asset is created first and the dates written
- * afterwards — the path that can fail per field, which is what the report describes.
+ * Where the platform sets metadata as the asset is created, the save's own report is the answer.
+ * Where it does not, the asset is created first and the fields written afterwards — the path
+ * that can fail per field, which its report describes the same way.
  */
 async function saveWithMetadata(
   outcome: CompressionOutcome,
@@ -46,15 +45,16 @@ async function saveWithMetadata(
   const { source, outputPath } = outcome;
   const target = saveTargetFor(outcome, mode);
 
-  const savedAssetId = await saveToLibrary(outputPath, target);
+  const { assetId, carried } = await saveToLibrary(outputPath, target);
   // One line per save; the native side logs the detail (`adb logcat -s MediaTools`).
-  console.log(`[save] mode=${mode} → ${savedAssetId}`);
+  console.log(`[save] mode=${mode} → ${assetId}`);
 
   if (mode !== 'original') return null;
-  if (saveCarriesMetadata) {
-    return { applied: ['capturedAt', 'modifiedAt'], skipped: [] };
+  if (carried) {
+    logMetadataSkips(carried);
+    return carried;
   }
-  return applySavedAssetMetadata(savedAssetId, source);
+  return applySavedAssetMetadata(assetId, source);
 }
 
 /** Only an "original" save carries the source's dates — a fresh copy is deliberately dated now. */
@@ -73,6 +73,10 @@ function saveTargetFor(
       : {}),
     ...(keepOriginal && source.modifiedAt !== null
       ? { modifiedAtMs: source.modifiedAt }
+      : {}),
+    // Sent only where it can be stored, so no skip entry appears for an unsupported promise.
+    ...(keepOriginal && canCarryLocation && source.location
+      ? { location: source.location }
       : {}),
   };
 }
@@ -97,6 +101,10 @@ export function savedMessage(
   const applied = new Set(report?.applied ?? []);
   if (applied.has('capturedAt') && applied.has('modifiedAt')) {
     return 'Saved with the original dates.';
+  }
+  // iOS: the modified date is never settable, so date + location is that platform's full success.
+  if (applied.has('capturedAt') && applied.has('location')) {
+    return 'Saved with the original date and location.';
   }
   if (applied.has('capturedAt')) return 'Saved with the original capture date.';
   return 'Saved to your gallery, but the original dates could not be kept.';

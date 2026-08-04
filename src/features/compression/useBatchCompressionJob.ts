@@ -77,6 +77,7 @@ export function useBatchCompressionJob(plan: BatchPlan): BatchJob {
   // The queue loop lives outside React's render cycle; these refs are its view of the world.
   const itemsRef = useRef(items);
   const cancelledRef = useRef(false);
+  const suspendedRef = useRef(false);
   const cancelCurrent = useRef<(() => void) | null>(null);
 
   const cancel = useCallback(() => {
@@ -114,7 +115,14 @@ export function useBatchCompressionJob(plan: BatchPlan): BatchJob {
     // app killed with ForegroundServiceDidNotStartInTimeException (see beginBackgroundSession).
     const itemTitle = (index: number) =>
       `Compressing ${index + 1} of ${plan.items.length} — ${plan.items[index].video.filename}`;
-    const background = beginBackgroundSession(itemTitle(0));
+    const background = beginBackgroundSession(itemTitle(0), {
+      // §7 iOS: out of background time. Stopping the queue through its own cancel path keeps the
+      // guarantee that already-finished videos are saved; the rest report as paused, not lost.
+      onSuspended: () => {
+        suspendedRef.current = true;
+        cancel();
+      },
+    });
 
     const ticker = setInterval(() => {
       if (active) setElapsedMs(Date.now() - startedAt);
@@ -197,10 +205,15 @@ export function useBatchCompressionJob(plan: BatchPlan): BatchJob {
       }
     };
 
+    // A queue the user stopped and one iOS ran out of background time for end the same way;
+    // only the wording owes the difference.
+    const stoppedNote = () =>
+      suspendedRef.current ? 'Paused in the background' : 'Cancelled';
+
     void (async () => {
       for (let index = 0; index < plan.items.length; index++) {
         if (cancelledRef.current) {
-          patchItem(index, { phase: 'skipped', note: 'Cancelled' });
+          patchItem(index, { phase: 'skipped', note: stoppedNote() });
           continue;
         }
 
@@ -208,7 +221,7 @@ export function useBatchCompressionJob(plan: BatchPlan): BatchJob {
           await compressOne(index);
         } catch (error) {
           if (cancelledRef.current) {
-            patchItem(index, { phase: 'skipped', note: 'Cancelled' });
+            patchItem(index, { phase: 'skipped', note: stoppedNote() });
           } else {
             // One bad video must not sink the queue — record why and move on (§10).
             patchItem(index, { phase: 'failed', note: describe(error) });
@@ -254,7 +267,7 @@ export function useBatchCompressionJob(plan: BatchPlan): BatchJob {
       background.end();
       workspace.markJobFinished();
     };
-  }, [plan]);
+  }, [cancel, plan]);
 
   const overallProgress = useMemo(() => overallOf(items), [items]);
 

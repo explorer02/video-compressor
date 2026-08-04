@@ -1,4 +1,4 @@
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 
 import type { CompressionOutcome } from '../core/compression/types';
 import {
@@ -9,7 +9,7 @@ import {
   formatResolution,
   formatSavingPercent,
 } from '../core/format';
-import { canKeepOriginalMetadata } from '../core/metadata';
+import { canCarryLocation, canKeepOriginalMetadata } from '../core/metadata';
 import { playbackSource } from '../core/videoLibrary';
 import { ComparisonStage } from '../features/outcome/ComparisonStage';
 import { useSaveOutcome } from '../features/outcome/useSaveOutcome';
@@ -87,7 +87,11 @@ export function PreviewScreen({ outcome, onFinished }: PreviewScreenProps) {
           {canKeepOriginalMetadata ? (
             <Button
               label="Save as copy"
-              hint="Keeps the original dates"
+              hint={
+                canCarryLocation
+                  ? 'Keeps the original dates and location'
+                  : 'Keeps the original dates'
+              }
               busy={save.busy}
               onPress={() => save.saveCopy('original')}
             />
@@ -106,7 +110,7 @@ export function PreviewScreen({ outcome, onFinished }: PreviewScreenProps) {
           <Button
             label={replaceLabel(outcome)}
             variant="danger"
-            hint="Deletes the original video — the system will ask to confirm"
+            hint={REPLACE_HINT}
             disabled={save.busy}
             onPress={save.replaceOriginal}
           />
@@ -172,10 +176,21 @@ function Measure({
 /** What replacing is worth, on the button that does it — the screen's one number that matters. */
 function replaceLabel(outcome: CompressionOutcome): string {
   const freed = outcome.source.sizeBytes - outcome.outputSizeBytes;
-  return freed > 0
-    ? `Replace original \u2014 free up ${formatBytes(freed)}`
-    : 'Replace original';
+  if (freed <= 0) return 'Replace original';
+
+  return Platform.OS === 'ios'
+    ? `Replace original \u2014 ${formatBytes(freed)} smaller`
+    : `Replace original \u2014 free up ${formatBytes(freed)}`;
 }
+
+/**
+ * iOS deletes park in Recently Deleted for ~30 days before the space comes back, so "free up"
+ * and "deletes" would overpromise there \u2014 the hint says where the original actually goes.
+ */
+const REPLACE_HINT = Platform.select({
+  ios: 'Moves the original to Recently Deleted \u2014 the system will ask to confirm',
+  default: 'Deletes the original video \u2014 the system will ask to confirm',
+});
 
 const styles = StyleSheet.create({
   content: { padding: spacing.lg, gap: spacing.lg },

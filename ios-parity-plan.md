@@ -5,6 +5,14 @@ The route from "Android ships first" to full feature parity on iOS, as promised 
 source of truth for what the app _does_, and each phase below updates it (plus
 [CHANGELOG.md](CHANGELOG.md)) in the same change that lands the feature.
 
+> **Status (2026-08-04):** the code for Phases 1–3 and Phase 4's calibration/copy items has
+> landed — the Swift module is implemented, capabilities read true, the save report refactor and
+> the background-task strategy are in, and typecheck/lint pass. What remains is everything that
+> needs a Mac and a device: the Phase 0 walk (prebuild, pods, full-flow audit), Phase 4's device
+> matrix (iCloud, HDR/Dolby Vision, orientation, speed target), and the §12 acceptance run. The
+> Risks table is now the checklist for that verification — especially the `ph://` id round-trip,
+> the `fileSize` KVC read, and `manual`-mode bitrates through the iOS exporter.
+
 ## Where iOS stands today
 
 The app was built for this port. Every platform gap sits behind
