@@ -37,7 +37,9 @@ which always describes the current state of the product.
     retryable one (stay put) (§10).
   - Tooling: two pre-existing `react-hooks/immutability` lint errors in the comparison stage are
     suppressed with a scoped, explained disable — expo-video's player is an imperative handle,
-    driven from event handlers, not a render-phase mutation. Lint is green again.
+    driven from event handlers, not a render-phase mutation. Lint is green again. The lockfile is
+    reconciled with package.json (it was missing `typescript@5.9.3` and two transitive entries),
+    so `npm ci` works again.
 - Planning (docs only, no product change): [ios-parity-plan.md](ios-parity-plan.md) — the phased
   route to iOS feature parity. Inventories what is already cross-platform versus stubbed behind
   `mediaToolsCapabilities`, then sequences the work: boot/audit, native reads (properties +
