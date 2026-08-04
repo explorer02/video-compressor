@@ -4,6 +4,15 @@ Every feature added, changed, or removed gets a dated entry here, in the same ch
 implements it — newest date first. § references point to sections of [product.md](product.md),
 which always describes the current state of the product.
 
+## 2026-08-04
+
+- Planning (docs only, no product change): [ios-parity-plan.md](ios-parity-plan.md) — the phased
+  route to iOS feature parity. Inventories what is already cross-platform versus stubbed behind
+  `mediaToolsCapabilities`, then sequences the work: boot/audit, native reads (properties +
+  sizes), native writes (save + metadata, with a truthful save report replacing the hardcoded
+  applied-fields claim), §7 background continuation, and calibration/edge cases (iCloud, HDR,
+  256 kbps audio in estimates) through the §12 acceptance run.
+
 ## 2026-08-03
 
 - **Fix: out-of-memory crashes traced to video preview buffering** (§3.4/§9). A heap dump captured
