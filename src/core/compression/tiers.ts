@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 
+import { clamp } from '../../utils/number';
 import type { LibraryVideo } from '../videoLibrary';
 import type { QualityTierId } from './types';
 
@@ -223,8 +224,4 @@ function totalSourceKbps(facts: TierSourceFacts): number | null {
   if (!facts.sizeBytes || !facts.durationMs || facts.durationMs <= 0)
     return null;
   return (facts.sizeBytes * 8) / (facts.durationMs / 1000) / 1000;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
 }

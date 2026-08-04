@@ -7,7 +7,7 @@ import {
   ThresholdFilterControl,
   thresholdFilterLabel,
   type ThresholdFilter,
-} from './ThresholdFilterControl';
+} from './thresholdFilterControl';
 
 export type SizeFilterControlProps = {
   value: SizeFilter;

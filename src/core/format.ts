@@ -1,8 +1,6 @@
 /** Presentation helpers shared by every screen. Formatting lives here, not in components. */
 
-const KB = 1000;
-const MB = KB * 1000;
-const GB = MB * 1000;
+import { GB, KB, MB } from '../constants/units';
 
 /** Decimal units, matching what gallery apps and OS storage screens show. */
 export function formatBytes(bytes: number): string {

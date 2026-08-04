@@ -1,8 +1,8 @@
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
-import type { MediaAccessState } from '../core/videoLibrary';
-import { spacing } from '../theme';
-import { AppText, Button, Screen } from '../ui';
+import type { MediaAccessState } from '../../core/videoLibrary';
+import { AppText, Button, Screen } from '../../ui';
+import { styles } from './styles';
 
 /**
  * Shown while access is undetermined or denied (§9). A denial that the OS will no longer prompt for
@@ -39,12 +39,3 @@ export function PermissionGateScreen({ access }: { access: MediaAccessState }) {
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  body: {
-    flex: 1,
-    justifyContent: 'center',
-    gap: spacing.lg,
-    padding: spacing.xl,
-  },
-});

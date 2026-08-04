@@ -1,72 +1,34 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { sizeIndex } from '../../core/sizeIndex';
+import { sizeIndex } from '../../../core/sizeIndex';
 import {
-  DEFAULT_SORT,
   listAllVideoIds,
   listAllVideos,
   listVideos,
-  matchesDurationFilter,
-  matchesSizeFilter,
   nextSort,
   readStoredDurationFilter,
   readStoredSizeFilter,
   readStoredSort,
-  sameDurationFilter,
-  sameSizeFilter,
   storeDurationFilter,
   storeSizeFilter,
   storeSort,
   subscribeToLibraryChanges,
   type DurationFilter,
   type LibraryVideo,
-  type MediaStoreSortKey,
   type SizeFilter,
   type VideoSort,
   type VideoSortKey,
-} from '../../core/videoLibrary';
-
-/** §4: ~60 rows per page, infinite scroll. */
-const PAGE_SIZE = 60;
-
-/** The media library emits a burst of events after a save or delete — collapse them. */
-const CHANGE_DEBOUNCE_MS = 400;
-
-const NO_VIDEOS: LibraryVideo[] = [];
-
-export type BrowserStatus = 'loading' | 'ready' | 'error';
-
-export type VideoBrowser = {
-  videos: LibraryVideo[];
-  status: BrowserStatus;
-  refreshing: boolean;
-  hasMore: boolean;
-  /** Videos matching the current filter. Null until the count pass finishes. */
-  totalCount: number | null;
-  /** Videos in the library regardless of filter, so a filtered list reads as filtered. */
-  libraryCount: number | null;
-  sort: VideoSort;
-  sizeFilter: SizeFilter;
-  durationFilter: DurationFilter;
-  /** False until the size index lands; the toolbar disables both size options. */
-  sizeSortAvailable: boolean;
-  toggleSort: (key: VideoSortKey) => void;
-  setSizeFilter: (filter: SizeFilter) => void;
-  setDurationFilter: (filter: DurationFilter) => void;
-  loadMore: () => void;
-  refresh: () => void;
-  /** Every video in the current view, not just the pages fetched so far. Feeds "Select all". */
-  listAllInView: () => Promise<LibraryVideo[]>;
-};
-
-/** What the library returned, and for which view — the query it answers is part of the value. */
-type LoadedPages = {
-  sort: VideoSort;
-  sizeFilter: SizeFilter;
-  durationFilter: DurationFilter;
-  videos: LibraryVideo[];
-  hasMore: boolean;
-};
+} from '../../../core/videoLibrary';
+import { CHANGE_DEBOUNCE_MS, NO_VIDEOS, PAGE_SIZE } from './constants';
+import {
+  appendNew,
+  matchesView,
+  mediaStoreSort,
+  needsFullScan,
+  resolveSort,
+  scanLibrary,
+} from './query';
+import type { BrowserStatus, LoadedPages, VideoBrowser } from './types';
 
 export function useVideoBrowser(enabled: boolean): VideoBrowser {
   const [sort, setSort] = useState<VideoSort>(() =>
@@ -290,113 +252,4 @@ export function useVideoBrowser(enabled: boolean): VideoBrowser {
     refresh,
     listAllInView,
   };
-}
-
-/**
- * The media store cannot sort by size, so until the size index exists that choice falls back to a
- * sort it can perform. The toolbar disables the option, so this only guards a preference written
- * by a later build.
- */
-const SIZE_SORT_FALLBACK: MediaStoreSortKey = 'createdAt';
-
-function resolveSort(stored: VideoSort): VideoSort {
-  return stored.key === 'size' && !sizeIndex.available ? DEFAULT_SORT : stored;
-}
-
-/**
- * Sorting or filtering by size needs every size known, and filtering by duration needs every row
- * seen before any page can claim to be complete — the media store can answer neither. All three
- * share one path: read the whole library, then filter, rank and page in memory.
- */
-function needsFullScan(
-  sort: VideoSort,
-  sizeFilter: SizeFilter,
-  durationFilter: DurationFilter
-): boolean {
-  if (durationFilter !== null) return true;
-  if (!sizeIndex.available) return false;
-  return sort.key === 'size' || sizeFilter !== null;
-}
-
-async function scanLibrary(
-  sort: VideoSort,
-  sizeFilter: SizeFilter,
-  durationFilter: DurationFilter
-): Promise<LibraryVideo[]> {
-  const all = await listAllVideos(mediaStoreSort(sort));
-  // A full read is also the moment to forget sizes of assets that no longer exist (see prune).
-  sizeIndex.prune(all.map(video => video.id));
-
-  // Duration rides along in every media-store row; only size needs the index resolved.
-  const needsSizes =
-    sizeIndex.available && (sort.key === 'size' || sizeFilter !== null);
-  if (needsSizes) await sizeIndex.ensure(all);
-
-  // A video whose size or duration is unknown is left out of a filtered view rather than counted
-  // as 0 — an "under 10 MB" or "under 30 s" list must not claim files nobody has measured.
-  let matching = all;
-  if (durationFilter !== null) {
-    matching = matching.filter(
-      video =>
-        video.durationMs !== null &&
-        matchesDurationFilter(video.durationMs, durationFilter)
-    );
-  }
-  if (sizeFilter !== null) {
-    matching = matching.filter(video => {
-      const sizeBytes = sizeIndex.get(video);
-      return sizeBytes !== null && matchesSizeFilter(sizeBytes, sizeFilter);
-    });
-  }
-
-  return sort.key === 'size' ? rankBySize(matching, sort.direction) : matching;
-}
-
-/** Assets whose size could not be read sort last rather than pretending to be zero bytes. */
-function rankBySize(
-  videos: LibraryVideo[],
-  direction: VideoSort['direction']
-): LibraryVideo[] {
-  const sign = direction === 'asc' ? 1 : -1;
-
-  return [...videos].sort((a, b) => {
-    const sizeA = sizeIndex.get(a);
-    const sizeB = sizeIndex.get(b);
-    if (sizeA === null) return sizeB === null ? 0 : 1;
-    if (sizeB === null) return -1;
-    return (sizeA - sizeB) * sign;
-  });
-}
-
-function mediaStoreSort(sort: VideoSort): {
-  key: MediaStoreSortKey;
-  direction: VideoSort['direction'];
-} {
-  return {
-    key: sort.key === 'size' ? SIZE_SORT_FALLBACK : sort.key,
-    direction: sort.direction,
-  };
-}
-
-function matchesView(
-  loaded: LoadedPages,
-  sort: VideoSort,
-  sizeFilter: SizeFilter,
-  durationFilter: DurationFilter
-): boolean {
-  return (
-    loaded.sort.key === sort.key &&
-    loaded.sort.direction === sort.direction &&
-    sameSizeFilter(loaded.sizeFilter, sizeFilter) &&
-    sameDurationFilter(loaded.durationFilter, durationFilter)
-  );
-}
-
-function appendNew(
-  existing: LibraryVideo[],
-  incoming: LibraryVideo[]
-): LibraryVideo[] {
-  const seen = new Set(existing.map(video => video.id));
-  const fresh = incoming.filter(video => !seen.has(video.id));
-  return fresh.length === 0 ? existing : [...existing, ...fresh];
 }

@@ -15,9 +15,8 @@ import type {
 import { formatDurationWords } from '../../core/format';
 import type { LibraryVideo } from '../../core/videoLibrary';
 import { workspace } from '../../core/workspace';
-
-/** Elapsed time ticks often enough to feel live without re-rendering the whole screen constantly. */
-const TICK_MS = 500;
+import { clamp01 } from '../../utils/number';
+import { describeCompressionError, estimateEta, TICK_MS } from './jobTiming';
 
 /** Below this the remaining-time guess swings wildly; §3.3 only promises a rough ETA. */
 const MIN_PROGRESS_FOR_ETA = 0.05;
@@ -108,14 +107,14 @@ export function useCompressionJob({
         phase: 'running',
         progress,
         elapsedMs,
-        etaMs: estimateEta(elapsedMs, progress),
+        etaMs: estimateEta(elapsedMs, progress, MIN_PROGRESS_FOR_ETA),
       });
     }, TICK_MS);
 
     const run = runCompressionJob(video, source, tierId, fraction => {
-      progress = clampProgress(fraction);
+      progress = clamp01(fraction);
       const elapsedMs = Date.now() - startedAt;
-      const etaMs = estimateEta(elapsedMs, progress);
+      const etaMs = estimateEta(elapsedMs, progress, MIN_PROGRESS_FOR_ETA);
 
       // The screen updates on the event itself, not the next tick — §3.3 shows tenths of a
       // percent, and a 500 ms sample of those reads as stuttering.
@@ -151,7 +150,9 @@ export function useCompressionJob({
         if (cancelled.current) onCancelled();
         else if (suspended.current) {
           setJob({ phase: 'failed', message: SUSPENDED_IN_BACKGROUND });
-        } else setJob({ phase: 'failed', message: describe(error) });
+        } else {
+          setJob({ phase: 'failed', message: describeCompressionError(error) });
+        }
       } finally {
         clearInterval(ticker);
         background.end();
@@ -180,17 +181,3 @@ const NOT_ENOUGH_SPACE =
 
 const SUSPENDED_IN_BACKGROUND =
   'iOS paused this compression in the background. Keep the app open while it runs, or start it again.';
-
-function estimateEta(elapsedMs: number, progress: number): number | null {
-  if (progress < MIN_PROGRESS_FOR_ETA) return null;
-  return Math.round((elapsedMs / progress) * (1 - progress));
-}
-
-function clampProgress(fraction: number): number {
-  if (!Number.isFinite(fraction)) return 0;
-  return Math.min(Math.max(fraction, 0), 1);
-}
-
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : 'Compression failed.';
-}

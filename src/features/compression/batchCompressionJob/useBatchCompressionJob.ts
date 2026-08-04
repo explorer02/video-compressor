@@ -1,23 +1,31 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useKeepAwake } from 'expo-keep-awake';
 
-import type { BatchPlan, BatchSaveAction } from '../../app/flow/types';
+import type { BatchPlan } from '../../../app/flow/types';
 import {
   beginBackgroundSession,
   ensureNotificationPermission,
-} from '../../core/background';
-import { runCompressionJob } from '../../core/compression/runJob';
+} from '../../../core/background';
+import { runCompressionJob } from '../../../core/compression/runJob';
 import {
   estimateOutputBytes,
   evaluateTier,
   tierById,
-} from '../../core/compression/tiers';
-import { formatDurationWords } from '../../core/format';
-import { readSourceVideo } from '../../core/metadata';
-import type { LibraryVideo } from '../../core/videoLibrary';
-import { assetExists, deleteAssets } from '../../core/videoLibrary';
-import { workspace } from '../../core/workspace';
-import { saveCompressedCopy } from '../outcome/saveOutcome';
+} from '../../../core/compression/tiers';
+import { formatDurationWords } from '../../../core/format';
+import { readSourceVideo } from '../../../core/metadata';
+import { assetExists, deleteAssets } from '../../../core/videoLibrary';
+import { workspace } from '../../../core/workspace';
+import { clamp01 } from '../../../utils/number';
+import { saveCompressedCopy } from '../../outcome/saveOutcome';
+import { describeCompressionError, estimateEta, TICK_MS } from '../jobTiming';
+import {
+  overallOf,
+  pendingItem,
+  saveModeFor,
+  savedBytesOf,
+} from './batchItems';
+import type { BatchItem, BatchJob, BatchJobPhase } from './types';
 
 /**
  * The batch queue: one hardware-encoder session at a time, each finished video saved before the
@@ -26,43 +34,8 @@ import { saveCompressedCopy } from '../outcome/saveOutcome';
  * mode can cost the user a video.
  */
 
-const TICK_MS = 500;
-
 /** Below this the overall ETA swings wildly; the screen shows "estimating" instead. */
 const MIN_PROGRESS_FOR_ETA = 0.03;
-
-export type BatchItemPhase =
-  'pending' | 'compressing' | 'saving' | 'done' | 'skipped' | 'failed';
-
-export type BatchItem = {
-  video: LibraryVideo;
-  action: BatchSaveAction;
-  phase: BatchItemPhase;
-  /** 0–1, meaningful while compressing. */
-  progress: number;
-  sourceSizeBytes: number | null;
-  outputSizeBytes: number | null;
-  /** Replace items only: null until the system dialog resolves, then whether it really happened. */
-  replaced: boolean | null;
-  /** Why the item was skipped or failed. */
-  note: string | null;
-};
-
-export type BatchJobPhase = 'running' | 'replacing' | 'finished';
-
-export type BatchJob = {
-  items: BatchItem[];
-  phase: BatchJobPhase;
-  /** True when the user stopped the queue early; finished items are already saved. */
-  cancelled: boolean;
-  /** Duration-weighted, across the whole batch. */
-  overallProgress: number;
-  elapsedMs: number;
-  etaMs: number | null;
-  savedBytes: number;
-  compressedCount: number;
-  cancel: () => void;
-};
 
 export function useBatchCompressionJob(plan: BatchPlan): BatchJob {
   useKeepAwake();
@@ -100,7 +73,11 @@ export function useBatchCompressionJob(plan: BatchPlan): BatchJob {
 
     const notificationTimes = () => {
       const elapsed = Date.now() - startedAt;
-      const eta = estimateEta(elapsed, overallOf(itemsRef.current));
+      const eta = estimateEta(
+        elapsed,
+        overallOf(itemsRef.current),
+        MIN_PROGRESS_FOR_ETA
+      );
       return {
         elapsed: `${formatDurationWords(elapsed)} elapsed`,
         remaining:
@@ -179,7 +156,7 @@ export function useBatchCompressionJob(plan: BatchPlan): BatchJob {
         );
 
         const run = runCompressionJob(video, source, plan.tier, fraction => {
-          patchItem(index, { progress: clampProgress(fraction) });
+          patchItem(index, { progress: clamp01(fraction) });
           background.update(
             overallOf(itemsRef.current),
             notificationTimes(),
@@ -224,7 +201,10 @@ export function useBatchCompressionJob(plan: BatchPlan): BatchJob {
             patchItem(index, { phase: 'skipped', note: stoppedNote() });
           } else {
             // One bad video must not sink the queue — record why and move on (§10).
-            patchItem(index, { phase: 'failed', note: describe(error) });
+            patchItem(index, {
+              phase: 'failed',
+              note: describeCompressionError(error),
+            });
           }
         }
       }
@@ -277,78 +257,11 @@ export function useBatchCompressionJob(plan: BatchPlan): BatchJob {
     cancelled: cancelledState,
     overallProgress,
     elapsedMs,
-    etaMs: estimateEta(elapsedMs, overallProgress),
+    etaMs: estimateEta(elapsedMs, overallProgress, MIN_PROGRESS_FOR_ETA),
     savedBytes: savedBytesOf(items),
     compressedCount: items.filter(item => item.phase === 'done').length,
     cancel,
   };
-}
-
-function pendingItem(video: LibraryVideo, action: BatchSaveAction): BatchItem {
-  return {
-    video,
-    action,
-    phase: 'pending',
-    progress: 0,
-    sourceSizeBytes: null,
-    outputSizeBytes: null,
-    replaced: null,
-    note: null,
-  };
-}
-
-/** Batch replacements always keep the original's metadata (§3.4); copies follow the batch choice. */
-function saveModeFor(
-  action: BatchSaveAction,
-  copyMetadata: BatchPlan['copyMetadata']
-): 'original' | 'fresh' {
-  return action === 'replace' ? 'original' : copyMetadata;
-}
-
-/**
- * Duration-weighted whole-batch progress. Skipped and failed items stop occupying weight — their
- * slice of the bar would otherwise stay forever unfilled — and a batch with nothing left counts
- * as complete.
- */
-function overallOf(items: BatchItem[]): number {
-  let total = 0;
-  let done = 0;
-
-  for (const item of items) {
-    if (item.phase === 'skipped' || item.phase === 'failed') continue;
-    const weight = item.video.durationMs ?? 1;
-    total += weight;
-    done += weight * itemProgress(item);
-  }
-
-  return total === 0 ? 1 : Math.min(done / total, 1);
-}
-
-function itemProgress(item: BatchItem): number {
-  switch (item.phase) {
-    case 'pending':
-      return 0;
-    case 'compressing':
-      return item.progress;
-    // Saving is a beat, not a stage worth its own bar — near-done is honest enough.
-    case 'saving':
-      return 0.98;
-    default:
-      return 1;
-  }
-}
-
-function savedBytesOf(items: BatchItem[]): number {
-  return items.reduce((sum, item) => {
-    if (
-      item.phase !== 'done' ||
-      item.sourceSizeBytes === null ||
-      item.outputSizeBytes === null
-    ) {
-      return sum;
-    }
-    return sum + Math.max(0, item.sourceSizeBytes - item.outputSizeBytes);
-  }, 0);
 }
 
 /** `Asset.delete` resolves the same on Allow and Deny — existence afterwards is the only truth. */
@@ -359,18 +272,4 @@ async function originalSurvived(assetId: string): Promise<boolean> {
     console.warn('[batch] could not verify a replaced original', error);
     return true;
   }
-}
-
-function estimateEta(elapsedMs: number, progress: number): number | null {
-  if (progress < MIN_PROGRESS_FOR_ETA || progress >= 1) return null;
-  return Math.round((elapsedMs / progress) * (1 - progress));
-}
-
-function clampProgress(fraction: number): number {
-  if (!Number.isFinite(fraction)) return 0;
-  return Math.min(Math.max(fraction, 0), 1);
-}
-
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : 'Compression failed.';
 }

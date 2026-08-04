@@ -6,6 +6,29 @@ which always describes the current state of the product.
 
 ## 2026-08-04
 
+- **Codebase restructure** (no product behavior change): every screen is now a folder
+  (`src/screens/<name>Screen/` with the primary component, `components/`, and `utils`/`constants`/
+  `types`/`styles` files where content exists, re-exported through `index.ts`); the oversized
+  feature modules split the same way (`features/library/videoBrowser/`,
+  `features/library/thresholdFilterControl/`, `features/compression/batchCompressionJob/`).
+  Duplicated helpers hoisted to shared homes: `src/utils/` (`plural`, `decapitalize`, `clamp`,
+  `clamp01`, `keyById`), `src/constants/units.ts` (`KB`/`MB`/`GB`), and
+  `features/compression/jobTiming.ts` (`TICK_MS`, `estimateEta`, `describeCompressionError` —
+  previously copied in both compression hooks). FlashList rows (`BatchRow`, `BatchItemRow`) and
+  the library `SelectionBar` are memoized so per-row taps and progress ticks no longer re-render
+  whole lists. Only observable tweak: the single-video Compressing screen now shows "Estimating
+  time remaining…" instead of "About 0 s left" during the final render at 100%.
+
+- **Custom hooks layer** (no behavior change): screen state logic moved out of components into
+  targeted hooks (`libraryScreen/hooks/{useSelectAll,useSelectionActions}`,
+  `selectedScreen/hooks/{useTierChoice,useStartCompression}`,
+  `batchSetupScreen/hooks/{useBatchActions,useBatchEligibility}`) composed by one container hook
+  per screen (`useLibraryScreen`, `useSelectedScreen`, `useBatchSetupScreen`) that returns view
+  state — the screen components are now pure markup. Shared
+  `features/library/useToastedDeletion` wraps `useDeleteVideos` with the standard toast wording
+  used by both the library and selected screens. Compressing, BatchCompressing, PermissionGate,
+  and Preview screens already reduce to a single feature hook and stay as they are.
+
 - **iOS feature parity** (supersedes the "Android ships first" status; §4/§7/§8/§10 updated —
   device verification still outstanding, tracked in the parity plan):
   - `media-tools` implemented on iOS: source properties (`PHAsset` dates/GPS + `AVAsset` frame

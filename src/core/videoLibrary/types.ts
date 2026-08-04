@@ -6,6 +6,8 @@
  * class-based API returns milliseconds on both platforms.
  */
 
+import { MB } from '../../constants/units';
+
 export type VideoAssetId = string;
 
 /** One row of the browser, built from a cheap media-store read. */
@@ -45,8 +47,6 @@ export type SizeFilter = {
   direction: FilterDirection;
   bytes: number;
 } | null;
-
-const MB = 1000 * 1000;
 
 /** The offered thresholds, in bytes. The control renders from this list. */
 export const SIZE_FILTER_THRESHOLDS: number[] = [

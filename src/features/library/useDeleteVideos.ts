@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Alert, Platform } from 'react-native';
 
 import {
@@ -66,7 +66,9 @@ export function useDeleteVideos({
     [busy, onDeleted, onFailed, onKept]
   );
 
-  return { busy, remove };
+  // Stable while nothing changed, so callbacks built on this survive unrelated re-renders and
+  // memoized consumers (the library's SelectionBar) can actually skip work.
+  return useMemo(() => ({ busy, remove }), [busy, remove]);
 }
 
 /**

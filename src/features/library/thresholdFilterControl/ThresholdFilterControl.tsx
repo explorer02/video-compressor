@@ -1,9 +1,13 @@
 import { useState } from 'react';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 
-import type { FilterDirection } from '../../core/videoLibrary';
-import { colors, radius, spacing } from '../../theme';
-import { AppText } from '../../ui';
+import type { FilterDirection } from '../../../core/videoLibrary';
+import { colors, radius, spacing } from '../../../theme';
+import { AppText } from '../../../ui';
+import { DirectionPill } from './components/DirectionPill';
+import { FilterOption } from './components/FilterOption';
+import type { ThresholdFilterControlProps } from './types';
+import { thresholdFilterLabel } from './utils';
 
 /**
  * The unit-agnostic core of the size and duration filters: a chip that names the active filter
@@ -11,35 +15,6 @@ import { AppText } from '../../ui';
  * formatting, and the "no filter" wording — so a new filter dimension is a thin adapter, not
  * another copy of this sheet.
  */
-
-export type ThresholdFilter = {
-  direction: FilterDirection;
-  threshold: number;
-} | null;
-
-export type ThresholdFilterControlProps = {
-  value: ThresholdFilter;
-  /** Offered cut-offs, ascending, in whatever unit `formatThreshold` renders. */
-  thresholds: number[];
-  /** Chip and sheet wording when no filter is active, e.g. "Any size". */
-  anyLabel: string;
-  formatThreshold: (threshold: number) => string;
-  /** Direction the sheet opens with before any filter exists. */
-  defaultDirection?: FilterDirection;
-  disabled?: boolean;
-  onChange: (filter: ThresholdFilter) => void;
-};
-
-/** The chip and sheet share one wording for a filter, so the list always reads as filtered. */
-export function thresholdFilterLabel(
-  filter: ThresholdFilter,
-  anyLabel: string,
-  formatThreshold: (threshold: number) => string
-): string {
-  if (filter === null) return anyLabel;
-  const sign = filter.direction === 'atLeast' ? '≥' : '<';
-  return `${sign} ${formatThreshold(filter.threshold)}`;
-}
 
 /**
  * Keeps videos on one side of a chosen threshold (§4) — at least it, for finding what is worth
@@ -147,58 +122,6 @@ export function ThresholdFilterControl({
   );
 }
 
-function DirectionPill({
-  label,
-  selected,
-  onPress,
-}: {
-  label: string;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={[styles.pill, selected ? styles.pillSelected : null]}
-    >
-      <AppText variant="captionStrong" tone={selected ? 'accent' : 'muted'}>
-        {label}
-      </AppText>
-    </Pressable>
-  );
-}
-
-function FilterOption({
-  label,
-  selected,
-  onPress,
-}: {
-  label: string;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.option,
-        pressed ? styles.optionPressed : null,
-      ]}
-    >
-      <AppText
-        variant={selected ? 'bodyStrong' : 'body'}
-        tone={selected ? 'accent' : 'default'}
-      >
-        {label}
-      </AppText>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   trigger: {
     alignItems: 'center',
@@ -227,23 +150,4 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingVertical: spacing.xs,
   },
-  pill: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
-  },
-  pillSelected: {
-    borderColor: colors.accent,
-    backgroundColor: colors.accentSoft,
-  },
-  option: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radius.md,
-  },
-  optionPressed: { backgroundColor: colors.surface },
 });

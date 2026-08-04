@@ -2,13 +2,13 @@ import { useEffect } from 'react';
 
 import { useMediaAccess } from '../core/videoLibrary';
 import { workspace } from '../core/workspace';
-import { BatchCompressingScreen } from '../screens/BatchCompressingScreen';
-import { BatchSetupScreen } from '../screens/BatchSetupScreen';
-import { CompressingScreen } from '../screens/CompressingScreen';
-import { LibraryScreen } from '../screens/LibraryScreen';
-import { PermissionGateScreen } from '../screens/PermissionGateScreen';
-import { PreviewScreen } from '../screens/PreviewScreen';
-import { SelectedScreen } from '../screens/SelectedScreen';
+import { BatchCompressingScreen } from '../screens/batchCompressingScreen';
+import { BatchSetupScreen } from '../screens/batchSetupScreen';
+import { CompressingScreen } from '../screens/compressingScreen';
+import { LibraryScreen } from '../screens/libraryScreen';
+import { PermissionGateScreen } from '../screens/permissionGateScreen';
+import { PreviewScreen } from '../screens/previewScreen';
+import { SelectedScreen } from '../screens/selectedScreen';
 import { useToast } from '../ui';
 import { useFlow } from './flow/FlowProvider';
 
